@@ -23,9 +23,8 @@ client = Elasticsearch(
 def search(q: str):
     result = {}
     try:
-        resp = client.search(body={"query": {"query_string": {"query": q}}})
+        resp = client.search(body={"query": {"query _string": {"query": q}}})
         data = resp["hits"]["hits"]
-        print(data)
         result['data'] = data
         result['meta'] = {'total':resp["hits"]["total"]["value"]}
     except Exception as e:
