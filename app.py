@@ -1,7 +1,9 @@
-from fastapi import FastAPI, HTTPException
-
-
-from elasticsearch import Elasticsearch
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi.middleware.cors import CORSMiddleware
+import os
+import uuid
+import json
+from elasticsearch import Elasticsearch, helpers
 
 app = FastAPI()
 
@@ -18,6 +20,17 @@ client = Elasticsearch(
     basic_auth=("elastic", ELASTIC_PASSWORD),
 )
 
+origins = [
+    "http://localhost:3000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/search")
 def search(q: str):
@@ -28,7 +41,55 @@ def search(q: str):
         print(data)
         result['data'] = data
         result['meta'] = {'total':resp["hits"]["total"]["value"]}
+        print(result["meta"])
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return result
 
+
+@app.post("/add")
+async def add(file: UploadFile= File(...), name: str = Form()):
+    
+    try:
+        contents = await file.read()
+        try:
+            f = open('sql.sql', 'wb')
+            f.write(contents)
+            f.close()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        cmd = "cat sql.sql | sqldump-to > j.json"
+        os.system(cmd)
+
+        def generate_docs():
+
+            try:
+                f = open('j.json', encoding='utf8')
+                data = json.load(f)
+                new_data = data
+            except:
+                f = open('j.json', encoding='utf8')
+                data = f.readlines()
+                new_data = []
+                # print(data)
+                for row in data:
+                    dict_obj = json.loads(row)
+                    new_data.append(dict_obj)  
+
+            for row in new_data:
+                doc = {
+                        "_index": name,
+                        "_id": uuid.uuid4(),
+                        "_source": row,
+                    }
+                yield doc
+    
+        helpers.bulk(client, generate_docs())
+        print("Done")
+        os.remove('j.json')
+        os.remove('sql.sql')        
+        
+        return {"status": 1}
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))
