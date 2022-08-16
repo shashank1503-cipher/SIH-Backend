@@ -4,6 +4,7 @@ import os
 import uuid
 import json
 from elasticsearch import Elasticsearch, helpers
+import pandas as pd
 
 app = FastAPI()
 
@@ -52,21 +53,25 @@ async def add(file: UploadFile= File(...), name: str = Form()):
     
     try:
         contents = await file.read()
+
         try:
             f = open('sql.sql', 'wb')
+            
             f.write(contents)
             f.close()
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        cmd = "cat sql.sql | sqldump-to > j.json"
+        cmd = f"sqldump-to -i {os.getcwd()}/sql.sql > j.json"
+        # print(cmd)
         os.system(cmd)
 
         def generate_docs():
-
             try:
                 f = open('j.json', encoding='utf8')
                 data = json.load(f)
+                print("len", len(data))
+                # print(data)
                 new_data = data
             except:
                 f = open('j.json', encoding='utf8')
@@ -77,19 +82,54 @@ async def add(file: UploadFile= File(...), name: str = Form()):
                     dict_obj = json.loads(row)
                     new_data.append(dict_obj)  
 
+            # print(new_data)
+
+            if len(new_data) == 0:
+                return []
+
+            f = open('json.json', 'w')
+            n_data = json.dumps(new_data)
+            f.write(n_data)
+
+            action_list = []
+
             for row in new_data:
                 doc = {
                         "_index": name,
                         "_id": uuid.uuid4(),
                         "_source": row,
                     }
-                yield doc
-    
-        helpers.bulk(client, generate_docs())
+                action_list.append(doc)
+            return action_list
+
+        docs = generate_docs()
+        if len(docs) == 0:
+            return {'status': 0}
+        helpers.bulk(client, docs)
         print("Done")
         os.remove('j.json')
-        os.remove('sql.sql')        
+        os.remove('sql.sql')
         
         return {"status": 1}
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
+
+@app.get('/get/indices')
+def indices():
+
+    # print("working")
+    data = client.indices.get_alias(index='*')
+    # print(data)
+
+    final_data = dict()
+    for key in data:
+        # print(key)
+        if key[0] != '.':
+            final_data[key] = data[key]
+
+    # print(final_data)
+    return {'indices': final_data}
+
+@app.post('/create')
+def create():
+    pass
