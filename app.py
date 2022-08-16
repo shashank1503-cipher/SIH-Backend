@@ -5,7 +5,8 @@ import os
 import uuid
 import json
 from elasticsearch import Elasticsearch, helpers
-
+from PyPDF2 import PdfReader
+import validators
 app = FastAPI()
 
 
@@ -33,8 +34,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+
 @app.get("/")
-def get_routes():
+async def get_routes():
     routes = {
         "Search API":"/search",
         "Add Data": "/add"
@@ -42,7 +45,7 @@ def get_routes():
     return routes
 
 @app.get("/search")
-def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10):
+async def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10):
     result = {}
     try:
         resp = client.search(body={"from":page,"size":per_page,"query": {"query_string": {"query": q}}})
@@ -54,10 +57,47 @@ def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10):
         raise HTTPException(status_code=500, detail=str(e))
     return result
 
-
-@app.post("/add")
+@app.post("/add_data_to_index")
+async def add_data_to_index(data: str):
+    data = json.loads(data)
+    fetch_index = data.get('index',None)
+    if not fetch_index:
+        raise HTTPException(status_code=400, detail="Index not found")
+    fetch_doc_type = data.get('doc_type',None)
+    if not fetch_doc_type:
+        raise HTTPException(status_code=400, detail="Doc Type not found")
+    if fetch_doc_type == 'text':
+        fetch_data = data.get('data',None)
+        if not fetch_data:
+            raise HTTPException(status_code=400, detail="Data not found")
+        try:
+            fetch_data['doc_type'] = fetch_doc_type
+            client.index(index=fetch_index,body=fetch_data)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+        return {"message":"Data added to index"}
+    else:
+        raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+@app.post("/add_pdf_to_index")
+async def add_pdf_to_index(data:str):
+    fetch_url = json.loads(data).get('url',None)
+    if not fetch_url:
+        raise HTTPException(status_code=400, detail="URL not found")
+    if not validators.url(fetch_url):
+        raise HTTPException(status_code=400, detail="Invalid URL")
+    fetch_index = json.loads(data).get('index',None)
+    if not fetch_index:
+        raise HTTPException(status_code=400, detail="Index not found")
+    fetch_doc_type = json.loads(data).get('doc_type',None)
+    if not fetch_doc_type:
+        raise HTTPException(status_code=400, detail="Doc Type not found")
+    if fetch_doc_type == 'pdf':
+        #pdf_Code
+        pass
+    else:
+        raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+@app.post("/add_sql_dump")
 async def add(file: UploadFile= File(...), name: str = Form()):
-    
     try:
         contents = await file.read()
         try:
