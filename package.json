@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/bhavyag54/SIH-Backend#readme",
   "dependencies": {
+    "@chakra-ui/icons": "^2.0.8",
     "sqldump-to": "^1.0.3"
   }
 }

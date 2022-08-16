@@ -1,7 +1,13 @@
 __pycache__/
+<<<<<<< HEAD
 *.py[cod]
 node_modules
 package-lock.json
 *.sql
 *.json
 venv/
+=======
+*.pyc
+node_modules/
+temp_script.py
+>>>>>>> eecf40870ef460dbebf2b9eed8f8eb6d1565bd33
