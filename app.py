@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import FastAPI, HTTPException, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -32,11 +33,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def get_routes():
+    routes = {
+        "Search API":"/search",
+        "Add Data": "/add"
+    }
+    return routes
+
 @app.get("/search")
-def search(q: str):
+def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10):
     result = {}
     try:
-        resp = client.search(body={"query": {"query _string": {"query": q}}})
+        resp = client.search(body={"from":page,"size":per_page,"query": {"query_string": {"query": q}}})
         data = resp["hits"]["hits"]
         result['data'] = data
         result['meta'] = {'total':resp["hits"]["total"]["value"]}
@@ -57,7 +66,7 @@ async def add(file: UploadFile= File(...), name: str = Form()):
             f.close()
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
-
+        
         cmd = "cat sql.sql | sqldump-to > j.json"
         os.system(cmd)
 
@@ -71,7 +80,6 @@ async def add(file: UploadFile= File(...), name: str = Form()):
                 f = open('j.json', encoding='utf8')
                 data = f.readlines()
                 new_data = []
-                # print(data)
                 for row in data:
                     dict_obj = json.loads(row)
                     new_data.append(dict_obj)  
@@ -86,8 +94,8 @@ async def add(file: UploadFile= File(...), name: str = Form()):
     
         helpers.bulk(client, generate_docs())
         print("Done")
-        os.remove('j.json')
-        os.remove('sql.sql')        
+        # os.remove('j.json')
+        # os.remove('sql.sql')        
         
         return {"status": 1}
     except Exception as e:
