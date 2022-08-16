@@ -37,7 +37,7 @@ app.add_middleware(
 def search(q: str):
     result = {}
     try:
-        resp = client.search(body={"query": {"query _string": {"query": q}}})
+        resp = client.search(body={"query": {"query_string": {"query": q}}})
         data = resp["hits"]["hits"]
         result['data'] = data
         result['meta'] = {'total':resp["hits"]["total"]["value"]}

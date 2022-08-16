@@ -1,8 +1,7 @@
+__pycache__/
 *.py[cod]
 node_modules
 package-lock.json
 *.sql
 *.json
 venv/
-__pycache__/
-*.pyc
