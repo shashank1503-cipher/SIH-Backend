@@ -1,4 +1,5 @@
 import json
+from turtle import down
 import uuid
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 import validators
@@ -6,6 +7,7 @@ import os
 from elasticsearch import helpers
 
 import configs
+import utils
 
 client = configs.client
 router = APIRouter()
@@ -28,7 +30,7 @@ async def add_data_to_index(data: str):
             client.index(index=fetch_index,body=fetch_data)
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
-        return {"message":"Data added to index"}
+        return {"message":"Data added to index","data":data}
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
 @router.post("/pdftoindex")
@@ -45,10 +47,72 @@ async def add_pdf_to_index(data:str):
     if not fetch_doc_type:
         raise HTTPException(status_code=400, detail="Doc Type not found")
     if fetch_doc_type == 'pdf':
-        #pdf_Code
-        pass
+        try:
+            fetch_path = utils.download_data_from_cloudinary(fetch_url)
+        except Exception as e:
+            raise HTTPException(status_code=500,detail="Error Downloading File from Cloud on Server " + str(e))
+        try:
+            content = utils.get_data_from_pdf(fetch_path)
+            meta = utils.get_meta_data_from_doc(fetch_path,'pdf')
+        except Exception as e:
+            os.remove(fetch_path)
+            raise HTTPException(status_code=500,detail="Error Fetching Data From PDF " + str(e))
+        data = {
+        'doctype':fetch_doc_type,
+        'meta':meta,
+        'content':content,
+        'url':fetch_url
+        }
+        try:
+             client.index(index=fetch_index,body=data)
+        except Exception as e:
+            os.remove(fetch_path)
+            raise HTTPException(status_code=500,detail="Error Adding Data to Index " + str(e))
+        os.remove(fetch_path)
+        return {"message":"Data added to index","data":data}
+    
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+@router.post("/wordtoindex")
+async def add_word_to_index(data:str):
+    fetch_url = json.loads(data).get('url',None)
+    if not fetch_url:
+        raise HTTPException(status_code=400, detail="URL not found")
+    if not validators.url(fetch_url):
+        raise HTTPException(status_code=400, detail="Invalid URL")
+    fetch_index = json.loads(data).get('index',None)
+    if not fetch_index:
+        raise HTTPException(status_code=400, detail="Index not found")
+    fetch_doc_type = json.loads(data).get('doc_type',None)
+    if not fetch_doc_type:
+        raise HTTPException(status_code=400, detail="Doc Type not found")
+    if fetch_doc_type == 'doc':
+        try:
+            fetch_path = utils.download_data_from_cloudinary(fetch_url)
+        except Exception as e:
+            raise HTTPException(status_code=500,detail="Error Downloading File from Cloud on Server " + str(e))
+        try:
+            content = utils.extract_data_from_doc(fetch_path)
+            meta = utils.get_meta_data_from_doc(fetch_path,'doc')
+        except Exception as e:
+            os.remove(fetch_path)
+            raise HTTPException(status_code=500,detail="Error Fetching Data From Doc " + str(e))
+        data = {
+            'doctype':fetch_doc_type,
+            'meta':meta,
+            'content':content,
+            'url':fetch_url
+        }
+        try:
+             client.index(index=fetch_index,body=data)
+        except Exception as e:
+            os.remove(fetch_path)
+            raise HTTPException(status_code=500,detail="Error Adding Data to Index " + str(e))
+        os.remove(fetch_path)
+        return {"message":"Data added to index","data":data}
+    else:
+        raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+        
 @router.post("/sqltoindex")
 async def add(file: UploadFile= File(...), name: str = Form()):
     try:
@@ -87,8 +151,8 @@ async def add(file: UploadFile= File(...), name: str = Form()):
     
         helpers.bulk(client, generate_docs())
         print("Done")
-        # os.remove('j.json')
-        # os.remove('sql.sql')        
+        os.remove('j.json')
+        os.remove('sql.sql')        
         return {"status": 1}
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))

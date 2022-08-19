@@ -1,12 +1,8 @@
 from typing import Optional
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import os
-import uuid
-import json
-from elasticsearch import Elasticsearch, helpers
-from PyPDF2 import PdfReader
-import validators
+
+
 import add_data
 import configs
 
@@ -41,10 +37,19 @@ async def get_routes():
     return routes
 
 @app.get("/search")
-async def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10):
+async def search(q: str, index : Optional[str] = None, page: Optional[int] = 1, per_page: Optional[int] = 10,):
     result = {}
+    if not q:
+            raise HTTPException(status_code=400, detail="Query not found")
+    if index:
+        if not client.indices.exists(index=index):
+            raise HTTPException(status_code=400, detail="Index not found")
     try:
-        resp = client.search(body={"from":(page-1)*per_page,"size":per_page,"query": {"query_string": {"query": q}}})
+        query = {"from":(page-1)*per_page,"size":per_page,"query": {"query_string": {"query": q}}}
+        if index:
+            resp = client.search(body=query,index=index)
+        else:
+            resp = client.search(body=query)
         data = resp["hits"]["hits"]
         result['data'] = data
         result['meta'] = {'total':resp["hits"]["total"]["value"]}
