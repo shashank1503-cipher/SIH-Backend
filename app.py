@@ -5,8 +5,8 @@ import os
 import uuid
 import json
 from elasticsearch import Elasticsearch, helpers
-from PyPDF2 import PdfReader
-import validators
+# from PyPDF2 import PdfReader
+# import validators
 app = FastAPI()
 
 
@@ -45,10 +45,18 @@ async def get_routes():
     return routes
 
 @app.get("/search")
-async def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10):
+async def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10, index: Optional[str] = "", fields: Optional[str] = ""):
     result = {}
+
+    index = json.loads(index)
+    print(index)
+
     try:
-        resp = client.search(body={"from":page,"size":per_page,"query": {"query_string": {"query": q}}})
+        resp = client.search(index=index,
+        body={
+            "from":((page-1)*per_page),
+            "size":per_page, "query": {"query_string": {"query": q}},
+        })
         data = resp["hits"]["hits"]
         result['data'] = data
         result['meta'] = {'total':resp["hits"]["total"]["value"]}
@@ -56,6 +64,29 @@ async def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     return result
+
+# @app.get('/allfields')
+# async def fields():
+
+#     try:
+#         resp = client.indices.get_field_mapping(fields='*')
+
+#         fdata = {}
+#         for key in resp.keys():
+#             if(key[0] == '.'):
+#                 pass
+#             else:
+#                 fdata[key] = []
+#                 for mkey in resp[key]['mappings'].keys():
+#                     if '.keyword' in mkey or mkey[0] == '_':
+#                         pass
+#                     else:
+#                         fdata[key].append(mkey)
+                    
+                
+#         return {"data": fdata}
+#     except Exception as e:
+#         print('error', e)
 
 @app.post("/add_data_to_index")
 async def add_data_to_index(data: str):
@@ -78,8 +109,9 @@ async def add_data_to_index(data: str):
         return {"message":"Data added to index"}
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
-@app.post("/add_pdf_to_index")
-async def add_pdf_to_index(data:str):
+
+# @app.post("/add_pdf_to_index")
+# async def add_pdf_to_index(data:str):
     fetch_url = json.loads(data).get('url',None)
     if not fetch_url:
         raise HTTPException(status_code=400, detail="URL not found")
@@ -96,6 +128,7 @@ async def add_pdf_to_index(data:str):
         pass
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+
 @app.post("/add_sql_dump")
 async def add(file: UploadFile= File(...), name: str = Form()):
     try:
@@ -160,21 +193,29 @@ async def add(file: UploadFile= File(...), name: str = Form()):
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
 
-@app.get('/get/indices')
+
+
+@app.get('/indices')
 def indices():
 
-    # print("working")
-    data = client.indices.get_alias(index='*')
-    # print(data)
+    print("working")
+    try:
+        data = client.indices.get_alias(index='*')
+        print(data)
 
-    final_data = dict()
-    for key in data:
-        # print(key)
-        if key[0] != '.':
-            final_data[key] = data[key]
+        final_data = dict()
+        for key in data:
+            print(key)
+            if key[0] != '.':
+                final_data[key] = data[key]
 
-    # print(final_data)
-    return {'indices': final_data}
+        print(final_data)
+        return {'indices': final_data}
+    except Exception as e:
+        print(e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 @app.post('/create')
 def create():
