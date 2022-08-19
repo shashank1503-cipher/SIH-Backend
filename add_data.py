@@ -142,6 +142,7 @@ async def add(file: UploadFile= File(...), name: str = Form()):
                     new_data.routerend(dict_obj)  
 
             for row in new_data:
+                row['doc_type']= 'text'
                 doc = {
                         "_index": name,
                         "_id": uuid.uuid4(),
