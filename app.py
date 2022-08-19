@@ -1,17 +1,14 @@
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import os
-import uuid
-import json
-from elasticsearch import Elasticsearch, helpers
-# from PyPDF2 import PdfReader
-# import validators
+
+
 app = FastAPI()
 
 
 import add_data
 import configs
+import methods
 
 
 app = FastAPI()
@@ -33,13 +30,14 @@ app.add_middleware(
 
 
 app.include_router(add_data.router, prefix="/add_data")
+app.include_router(methods.router, prefix='/get')
 
 @app.get("/")
 async def get_routes():
     routes = {
         "Search API":"/search",
         "Add Data": "/add_data",
-        "Swagger_Docs": "/docs"
+        "Swagger_Docs": "/docs",
     }
     return routes
 

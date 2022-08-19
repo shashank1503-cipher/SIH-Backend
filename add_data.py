@@ -33,6 +33,8 @@ async def add_data_to_index(data: str):
         return {"message":"Data added to index","data":data}
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+
+
 @router.post("/pdftoindex")
 async def add_pdf_to_index(data:str):
     fetch_url = json.loads(data).get('url',None)
@@ -73,6 +75,8 @@ async def add_pdf_to_index(data:str):
     
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+
+
 @router.post("/wordtoindex")
 async def add_word_to_index(data:str):
     fetch_url = json.loads(data).get('url',None)
@@ -124,7 +128,8 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
         
-        cmd = "cat sql.sql | sqldump-to > j.json"
+        path = os.path()
+        cmd = f"sqldump-to -i {path}/sql.sql > j.json"
         os.system(cmd)
 
         def generate_docs():

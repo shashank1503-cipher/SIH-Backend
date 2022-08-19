@@ -1,3 +1,11 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form
 
-app = FastAPI()
+import configs
+
+client = configs.client
+
+router = APIRouter()
+
+@router.get('/indices')
+async def indices():
+    
