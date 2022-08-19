@@ -1,10 +1,10 @@
-__pycache__/
+__pycache__
 *.py[cod]
 node_modules
 package-lock.json
 *.sql
 *.json
-venv/
+venv
 *.pyc
 node_modules/
 temp_script.py
