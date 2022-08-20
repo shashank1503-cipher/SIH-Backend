@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-
+import json
 
 app = FastAPI()
 
@@ -42,17 +42,49 @@ async def get_routes():
     return routes
 
 @app.get("/search")
-async def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10, index: Optional[str] = "", fields: Optional[str] = ""):
+async def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10, filters: Optional[str] = ""):
     result = {}
+    print(filters)
+    filters = json.loads(filters)
+    print(filters)
+    print(q)
     if not q:
             raise HTTPException(status_code=400, detail="Query not found")
-    if index:
-        if not client.indices.exists(index=index):
+    if len(filters['index']) > 0:
+        if not client.indices.exists(index=filters['index']):
             raise HTTPException(status_code=400, detail="Index not found")
     try:
-        query = {"from":(page-1)*per_page,"size":per_page,"query": {"query_string": {"query": q}}}
-        if index:
-            resp = client.search(body=query,index=index)
+        query = {"from":(page-1)*per_page,"size":per_page,"query": {}}
+        print("doc length", len(filters['doc']))
+        if len(filters['doc']) > 0:
+            print(query)
+            query['query']['bool'] = {}
+            query['query']['bool']['must'] = [{
+                'bool': {
+                    'should': []
+                }},
+                {
+                    'query_string': {'query': q}
+                }
+            ]
+            print(query)
+            for doc in filters['doc']:
+                print('DOC TYPE', doc)
+                query['query']['bool']['must'][0]['bool']['should'].append({
+                    
+                    'match': {
+                        'doctype': doc
+                    }
+                    
+                })
+        else:
+            query = {"from":(page-1)*per_page,"size":per_page,"query": {'query_string': {'query': q}}}
+
+        print(query)
+            
+
+        if len(filters['index']) > 0:
+            resp = client.search(body=query,index=filters['index'])
         else:
             resp = client.search(body=query)
         data = resp["hits"]["hits"]
