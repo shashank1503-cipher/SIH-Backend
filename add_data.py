@@ -219,7 +219,7 @@ async def add_csv_image_to_index(file: UploadFile = File(...)):
     try:
         rateLimitCloudVision = totalSize if totalSize < 10 else 10
         
-        for i in range(20 // rateLimitCloudVision):
+        for i in range(totalSize // rateLimitCloudVision):
             try:
                 helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_4"))
             except Exception as e:
