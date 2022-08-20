@@ -1,10 +1,12 @@
 import datetime
+from fastapi import HTTPException
 from PyPDF2 import PdfReader,PdfFileReader
 import requests
 import os
 from urllib.parse import urlparse
 import textract
-
+from google.cloud import vision
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
 """Helper Function for Image Location"""
 
 from exif import Image
@@ -85,3 +87,57 @@ def get_meta_data_from_doc(path,type):
         return meta_data
 
 
+# creating a list of requests for making batch requests to cloud vision
+def constructReqs(start, imageURLs, rateLimitCloudVision):
+    reqs = []
+    try:
+        for i in range(start, start + rateLimitCloudVision):
+            visionClient = vision.ImageAnnotatorClient()
+            source_image = vision.ImageSource(image_uri=imageURLs[i])
+            request = vision.AnnotateImageRequest(
+                image = vision.Image(source = source_image),
+                features = [
+                    {"type_": vision.Feature.Type.LABEL_DETECTION},
+                    {"type_": vision.Feature.Type.TEXT_DETECTION},
+                ],
+            )
+            reqs.append(request)
+        response = visionClient.batch_annotate_images(requests = reqs)
+        return response
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))
+
+# extracting data from constructReqs response
+def getImageData(imageURLs, start, rateLimitCloudVision, index):
+    response = constructReqs(start, imageURLs, rateLimitCloudVision)
+    response = response.responses
+    
+    for i in range(start, start + rateLimitCloudVision):
+        indObj = {}
+        indObj["datatype"] = "image"
+        indObj["url"] = imageURLs[i];
+        indObj["metadata"] = {}
+        indObj["labels"] = []
+        indObj["texts"] = []
+        
+        # ~~utils wala metadata connect krlena yahan~~ indObj["metadata"]
+
+        # labels
+        for label in response[i - start].label_annotations:
+            val = label.description
+            indObj["labels"].append(val)
+         
+        # texts 
+        responseSize = len(response[i - start].text_annotations)
+        for j in range (1, responseSize):
+            val = response[i - start].text_annotations[j].description
+            indObj["texts"].append(val)
+        
+        doc = {
+            "_index": index,
+            "_source": indObj
+        }
+        
+        print(i, doc)
+        print("=" * 30)
+        yield doc
