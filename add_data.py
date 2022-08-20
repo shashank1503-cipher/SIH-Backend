@@ -138,7 +138,8 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
         
-        cmd = "cat sql.sql | sqldump-to > j.json"
+        path = os.path()
+        cmd = f"sqldump-to -i {path}/sql.sql > j.json"
         os.system(cmd)
 
         def generate_docs():
