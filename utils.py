@@ -1,3 +1,4 @@
+from urllib.request import urlopen
 import datetime
 from fastapi import HTTPException
 from PyPDF2 import PdfReader,PdfFileReader
@@ -18,20 +19,24 @@ def decimal_coords(coords, ref):
      decimal_degrees = -decimal_degrees
  return decimal_degrees
 def image_coordinates(image_path):
-    with open(image_path, 'rb') as src:
-        img = Image(src)
+    urlOpen = urlopen(image_path) 
+    img = urlOpen.read()
+    img_info = urlOpen.info()
+    file_length = img_info["Content-Length"]
+    file_format = img_info["Content-Type"]
+    img = Image(img)
     if img.has_exif:
         try:
-            img.gps_longitude
             coords = (decimal_coords(img.gps_latitude,
                     img.gps_latitude_ref),
                     decimal_coords(img.gps_longitude,
                     img.gps_longitude_ref))
+            return {"success": True, "data": [file_format, image_path.split("/")[-1], file_length,coords,img.get('gps_datestamp')]}
         except AttributeError:
             print ('No Coordinates')
     else:
         print ('The Image has no EXIF information')   
-    return coords,img.get('gps_datestamp')
+        return {"success": False}
 
 
 def get_data_from_pdf(path):
@@ -78,12 +83,21 @@ def get_meta_data_from_doc(path,type):
         return meta_data
     if type == 'image':
         meta_data = {}
-        lat,long = image_coordinates(path)
-        location = geolocator.reverse(str(lat)+','+str(long))
-        meta_data['coordinates'] = {'lat':lat,'long':long}
-        meta_data['name'] = path
-        meta_data['address'] = location
-        meta_data['file_size'] = os.path.getsize(path)
+        val = image_coordinates(path)
+        if(val["success"] == True):
+            file_format = val["data"][0]
+            file_name = val["data"][1]
+            file_size = val["data"][2]
+            lat,long = val["data"][3]
+            dateStamp = val["data"][4]
+            location = geolocator.reverse(str(lat)+','+str(long))
+
+            meta_data['coordinates'] = {'lat':lat,'long':long}
+            meta_data['name'] = file_name
+            meta_data['location'] = (location.raw)["display_name"]
+            meta_data['file_size'] = file_size
+            meta_data['date'] = dateStamp
+            meta_data['format'] = file_format 
         return meta_data
 
 
@@ -116,11 +130,9 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         indObj = {}
         indObj["datatype"] = "image"
         indObj["url"] = imageURLs[i];
-        indObj["metadata"] = {}
+        indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
         indObj["texts"] = []
-        
-        # ~~utils wala metadata connect krlena yahan~~ indObj["metadata"]
 
         # labels
         for label in response[i - start].label_annotations:
