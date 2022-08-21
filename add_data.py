@@ -211,15 +211,15 @@ async def add_cloud_image_to_index(prefix: str, maxSize : Optional[int] = 2000):
         raise HTTPException(status_code=500,detail=str(e))
 
 @router.post("/csvimagetoindex")
-async def add_csv_image_to_index(file: UploadFile = File(...)):
+async def add_csv_image_to_index(file: UploadFile = File(...), url_prop: Optional[str] = "photo_image_url"):
     images = read_csv(file.file, sep = "\t")
-    imageURLs = images["photo_image_url"]
+    imageURLs = images[url_prop]
     
     totalSize = imageURLs.size
     
     try:
         rateLimitCloudVision = totalSize if totalSize < 10 else 10
-        
+         
         for i in range(totalSize // rateLimitCloudVision):
             try:
                 helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_4"))
@@ -235,7 +235,7 @@ async def add_single_image_to_index(file: bytes = File(), index: Optional[str] =
     try:
         file_url = cloudinary.uploader.upload(file, folder = "textual_images")
         image.source.image_uri = file_url["url"]
-
+        
         request = {
             "image": image,
             "features": [
@@ -248,11 +248,9 @@ async def add_single_image_to_index(file: bytes = File(), index: Optional[str] =
         indObj = {}
         indObj["datatype"] = "image"
         indObj["url"] = file_url["url"];
-        indObj["metadata"] = {}
+        indObj["metadata"] = utils.get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
         indObj["texts"] = []
-
-        # ~~utils wala metadata connect krlena yahan~~ indObj["metadata"]
 
         # labels
         for label in response.label_annotations:
@@ -272,3 +270,8 @@ async def add_single_image_to_index(file: bytes = File(), index: Optional[str] =
     
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))        
+
+# @router.post("/testing")
+# async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
+#     return(utils.get_meta_data_from_doc(url, "image"))
+#     # print(client.options(ignore_status=[400,404]).indices.delete(index='sample_dataset_3'))
