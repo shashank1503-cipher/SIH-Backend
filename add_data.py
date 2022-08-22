@@ -1,16 +1,28 @@
 import json
-from turtle import down
+from typing import Optional
 import uuid
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form,Request
 import validators
 import os
 from elasticsearch import helpers
+from google.cloud import vision
+import cloudinary
+from pandas import read_csv
 
 import configs
 import utils
 
+import cloudinary.uploader
+import cloudinary.api
+
+# cloud vision api creds
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
+
 client = configs.client
+visionClient = vision.ImageAnnotatorClient()
+image = vision.Image()
 router = APIRouter()
+        
 
 @router.post("/texttoindex")
 async def add_data_to_index(req: Request):
@@ -33,6 +45,7 @@ async def add_data_to_index(req: Request):
         return {"message":"Data added to index","data":data}
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+
 @router.post("/pdftoindex")
 async def add_pdf_to_index(req:Request):
     data = await req.json()
@@ -74,6 +87,7 @@ async def add_pdf_to_index(req:Request):
     
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+
 @router.post("/wordtoindex")
 async def add_word_to_index(req:Request):
     data = await req.json()
@@ -126,7 +140,8 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
         
-        cmd = "cat sql.sql | sqldump-to > j.json"
+        path = os.path()
+        cmd = f"sqldump-to -i {path}/sql.sql > j.json"
         os.system(cmd)
 
         def generate_docs():
@@ -159,3 +174,106 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         return {"status": 1}
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
+    
+@router.post("/cloudimagetoindex")
+async def add_cloud_image_to_index(prefix: str, maxSize : Optional[int] = 2000):
+    try:
+        images = cloudinary.api.resources(
+        type = "upload", 
+        prefix = prefix,
+        max_results = maxSize)
+
+        rateLimitCloudinary = maxSize if maxSize < images.rate_limit_allowed else images.rate_limit_allowed
+        rateLimitCloudVision = maxSize if maxSize < 10 else 10
+        
+        next_cursor = None if rateLimitCloudinary == maxSize else images["next_cursor"]
+        for j in range(maxSize // rateLimitCloudinary):
+            if j != 0:
+                images = cloudinary.api.resources(
+                    type = "upload",
+                    prefix = prefix,
+                    max_results = maxSize,
+                    next_cursor = next_cursor
+                )
+                next_cursor = images["next_cursor"]
+                
+            imageURLs = [i["url"] for i in images["resources"]]
+            totalSize = len(imageURLs)
+
+            for i in range(totalSize // rateLimitCloudVision):
+                try:
+                    helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_3"))
+                except Exception as e:
+                    raise HTTPException(status_code=500,detail=str(e))    
+
+            print(j, "~^" * 30)
+            
+            return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))
+
+@router.post("/csvimagetoindex")
+async def add_csv_image_to_index(file: UploadFile = File(...), url_prop: Optional[str] = "photo_image_url"):
+    images = read_csv(file.file, sep = "\t")
+    imageURLs = images[url_prop]
+    
+    totalSize = imageURLs.size
+    
+    try:
+        rateLimitCloudVision = totalSize if totalSize < 10 else 10
+         
+        for i in range(totalSize // rateLimitCloudVision):
+            try:
+                helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_4"))
+            except Exception as e:
+                raise HTTPException(status_code=500,detail=str(e))    
+
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))
+
+@router.post("/singleimagetoindex")
+async def add_single_image_to_index(file: bytes = File(), index: Optional[str] = "sample_dataset_3"):
+    try:
+        file_url = cloudinary.uploader.upload(file, folder = "textual_images")
+        image.source.image_uri = file_url["url"]
+        
+        request = {
+            "image": image,
+            "features": [
+                {"type_": vision.Feature.Type.LABEL_DETECTION},
+                {"type_": vision.Feature.Type.TEXT_DETECTION},
+            ],
+        }
+
+        response = visionClient.annotate_image(request)
+        indObj = {}
+        indObj["datatype"] = "image"
+        indObj["url"] = file_url["url"];
+        indObj["metadata"] = utils.get_meta_data_from_doc(indObj["url"], "image")
+        indObj["labels"] = []
+        indObj["texts"] = []
+
+        # labels
+        for label in response.label_annotations:
+            val = label.description
+            indObj["labels"].append(val)
+
+        # texts 
+        responseSize = len(response.text_annotations)
+        for j in range (1, responseSize):
+            val = response.text_annotations[j].description
+            indObj["texts"].append(val)
+
+        print(indObj)
+        client.index(index = index, document = indObj)
+        
+        return {"success": True}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))        
+
+# @router.post("/testing")
+# async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
+#     return(utils.get_meta_data_from_doc(url, "image"))
+#     # print(client.options(ignore_status=[400,404]).indices.delete(index='sample_dataset_3'))
