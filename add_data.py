@@ -1,7 +1,7 @@
 import json
 from turtle import down
 import uuid
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form,Request
 import validators
 import os
 from elasticsearch import helpers
@@ -13,8 +13,8 @@ client = configs.client
 router = APIRouter()
 
 @router.post("/texttoindex")
-async def add_data_to_index(data: str):
-    data = json.loads(data)
+async def add_data_to_index(req: Request):
+    data = await req.json()
     fetch_index = data.get('index',None)
     if not fetch_index:
         raise HTTPException(status_code=400, detail="Index not found")
@@ -34,7 +34,8 @@ async def add_data_to_index(data: str):
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
 @router.post("/pdftoindex")
-async def add_pdf_to_index(data:str):
+async def add_pdf_to_index(req:Request):
+    data = await req.json()
     fetch_url = json.loads(data).get('url',None)
     if not fetch_url:
         raise HTTPException(status_code=400, detail="URL not found")
@@ -58,7 +59,7 @@ async def add_pdf_to_index(data:str):
             os.remove(fetch_path)
             raise HTTPException(status_code=500,detail="Error Fetching Data From PDF " + str(e))
         data = {
-        'doctype':fetch_doc_type,
+        'doc_type':fetch_doc_type,
         'meta':meta,
         'content':content,
         'url':fetch_url
@@ -74,7 +75,8 @@ async def add_pdf_to_index(data:str):
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
 @router.post("/wordtoindex")
-async def add_word_to_index(data:str):
+async def add_word_to_index(req:Request):
+    data = await req.json()
     fetch_url = json.loads(data).get('url',None)
     if not fetch_url:
         raise HTTPException(status_code=400, detail="URL not found")
@@ -98,7 +100,7 @@ async def add_word_to_index(data:str):
             os.remove(fetch_path)
             raise HTTPException(status_code=500,detail="Error Fetching Data From Doc " + str(e))
         data = {
-            'doctype':fetch_doc_type,
+            'doc_type':fetch_doc_type,
             'meta':meta,
             'content':content,
             'url':fetch_url
