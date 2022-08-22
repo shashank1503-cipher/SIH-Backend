@@ -247,7 +247,7 @@ async def add_single_image_to_index(file: bytes = File(), index: Optional[str] =
         response = visionClient.annotate_image(request)
         indObj = {}
         indObj["datatype"] = "image"
-        indObj["url"] = file_url["url"];
+        indObj["url"] = file_url["url"]
         indObj["metadata"] = {}
         indObj["labels"] = []
         indObj["texts"] = []
