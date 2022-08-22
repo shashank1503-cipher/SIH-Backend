@@ -248,7 +248,7 @@ async def add_single_image_to_index(file: bytes = File(), index: Optional[str] =
 
         response = visionClient.annotate_image(request)
         indObj = {}
-        indObj["datatype"] = "image"
+        indObj["doc_type"] = "image"
         indObj["url"] = file_url["url"];
         indObj["metadata"] = utils.get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
@@ -275,5 +275,5 @@ async def add_single_image_to_index(file: bytes = File(), index: Optional[str] =
 
 # @router.post("/testing")
 # async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
-#     return(utils.get_meta_data_from_doc(url, "image"))
-#     # print(client.options(ignore_status=[400,404]).indices.delete(index='sample_dataset_3'))
+#     # return(utils.get_meta_data_from_doc(url, "image"))
+#     print(client.options(ignore_status=[400,404]).indices.delete(index='sample_dataset_3'))

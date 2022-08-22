@@ -128,7 +128,7 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
     
     for i in range(start, start + rateLimitCloudVision):
         indObj = {}
-        indObj["datatype"] = "image"
+        indObj["doc_type"] = "image"
         indObj["url"] = imageURLs[i];
         indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
