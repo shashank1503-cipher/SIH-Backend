@@ -1,4 +1,5 @@
 import json
+from re import L
 from typing import Optional
 import uuid
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form,Request
@@ -7,6 +8,11 @@ import os
 from elasticsearch import helpers
 from google.cloud import vision
 import cloudinary
+import subprocess
+import csv
+import codecs
+from io import StringIO
+
 from pandas import read_csv
 from urllib.request import urlopen
 
@@ -134,7 +140,14 @@ async def add_word_to_index(req:Request):
 @router.post("/sqltoindex")
 async def add(file: UploadFile= File(...), name: str = Form()):
     try:
+        print(name)
+
+
         contents = await file.read()
+
+        # contents.replace(' IF NOT NULL', '')
+
+        print("Working")
         try:
             f = open('sql.sql', 'wb')
             f.write(contents)
@@ -142,9 +155,16 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
         
-        path = os.path()
+        # print("path: ", os.getcwd())
+        path = os.getcwd()
+        print(path)
         cmd = f"sqldump-to -i {path}/sql.sql > j.json"
-        os.system(cmd)
+        print(cmd)
+        try:
+            # os.system(cmd)
+            subprocess.run(['sqldump-to', '-i', f'{path}/sql.sql', '>', 'j.json'], check=True)
+        except subprocess.CalledProcessError:
+            raise HTTPException(status_code=400, detail=str(e))
 
         def generate_docs():
 
@@ -159,7 +179,10 @@ async def add(file: UploadFile= File(...), name: str = Form()):
                 for row in data:
                     dict_obj = json.loads(row)
                     new_data.append(dict_obj)
-                    
+
+            if not len(new_data):
+                raise HTTPException(status_code=400, detail="error")
+
             for row in new_data:
                 row['doc_type']= 'text'
                 doc = {
@@ -332,6 +355,40 @@ async def add_sound(req:Request):
         os.remove(fetch_path)
         return {"message":"Data added to index","data":data}
     
+
+
+@router.post('/csvtoindex')
+async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
+    print(name)
+    try:
+        contents = file.file.read()
+        # print(contents)
+        buffer = StringIO(contents.decode('utf-8'))
+        csvReader = csv.DictReader(buffer)
+        
+        out = list(csvReader)
+        
+        def generate_docs():
+
+            for row in out:
+                print(row)
+                row['doc_type'] = 'text'
+                doc = {
+                    "_index": name,
+                    "_id": uuid.uuid4(),
+                    "_source": row
+                }
+                print(doc)
+                yield doc
+        
+        # print("out", out)
+        helpers.bulk(client, generate_docs())
+
+        return {'status': 1}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
     

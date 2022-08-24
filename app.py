@@ -73,7 +73,7 @@ async def search(q: str, page: Optional[int] = 1, per_page: Optional[int] = 10, 
                 query['query']['bool']['must'][0]['bool']['should'].append({
                     
                     'match': {
-                        'doctype': doc
+                        'doc_type': doc
                     }
                     
                 })
