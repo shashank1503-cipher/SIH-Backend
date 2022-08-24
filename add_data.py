@@ -1,7 +1,7 @@
 import json
 from typing import Optional
 import uuid
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form,Request
 import validators
 import os
 from elasticsearch import helpers
@@ -25,8 +25,8 @@ router = APIRouter()
         
 
 @router.post("/texttoindex")
-async def add_data_to_index(data: str):
-    data = json.loads(data)
+async def add_data_to_index(req: Request):
+    data = await req.json()
     fetch_index = data.get('index',None)
     if not fetch_index:
         raise HTTPException(status_code=400, detail="Index not found")
@@ -47,7 +47,8 @@ async def add_data_to_index(data: str):
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
 
 @router.post("/pdftoindex")
-async def add_pdf_to_index(data:str):
+async def add_pdf_to_index(req:Request):
+    data = await req.json()
     fetch_url = json.loads(data).get('url',None)
     if not fetch_url:
         raise HTTPException(status_code=400, detail="URL not found")
@@ -71,7 +72,7 @@ async def add_pdf_to_index(data:str):
             os.remove(fetch_path)
             raise HTTPException(status_code=500,detail="Error Fetching Data From PDF " + str(e))
         data = {
-        'doctype':fetch_doc_type,
+        'doc_type':fetch_doc_type,
         'meta':meta,
         'content':content,
         'url':fetch_url
@@ -88,7 +89,8 @@ async def add_pdf_to_index(data:str):
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
 
 @router.post("/wordtoindex")
-async def add_word_to_index(data:str):
+async def add_word_to_index(req:Request):
+    data = await req.json()
     fetch_url = json.loads(data).get('url',None)
     if not fetch_url:
         raise HTTPException(status_code=400, detail="URL not found")
@@ -112,7 +114,7 @@ async def add_word_to_index(data:str):
             os.remove(fetch_path)
             raise HTTPException(status_code=500,detail="Error Fetching Data From Doc " + str(e))
         data = {
-            'doctype':fetch_doc_type,
+            'doc_type':fetch_doc_type,
             'meta':meta,
             'content':content,
             'url':fetch_url
@@ -211,16 +213,16 @@ async def add_cloud_image_to_index(prefix: str, maxSize : Optional[int] = 2000):
         raise HTTPException(status_code=500,detail=str(e))
 
 @router.post("/csvimagetoindex")
-async def add_csv_image_to_index(file: UploadFile = File(...)):
+async def add_csv_image_to_index(file: UploadFile = File(...), url_prop: Optional[str] = "photo_image_url"):
     images = read_csv(file.file, sep = "\t")
-    imageURLs = images["photo_image_url"]
+    imageURLs = images[url_prop]
     
     totalSize = imageURLs.size
     
     try:
         rateLimitCloudVision = totalSize if totalSize < 10 else 10
-        
-        for i in range(20 // rateLimitCloudVision):
+         
+        for i in range(totalSize // rateLimitCloudVision):
             try:
                 helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_4"))
             except Exception as e:
@@ -231,11 +233,12 @@ async def add_csv_image_to_index(file: UploadFile = File(...)):
         raise HTTPException(status_code=500,detail=str(e))
 
 @router.post("/singleimagetoindex")
-async def add_single_image_to_index(file: bytes = File(), index: Optional[str] = "sample_dataset_3"):
+async def add_single_image_to_index(cloud_url: str, index: str):
     try:
-        file_url = cloudinary.uploader.upload(file, folder = "textual_images")
-        image.source.image_uri = file_url["url"]
-
+        # print(file)
+        # file_url = cloudinary.uploader.upload(file, folder = "textual_images")
+        image.source.image_uri = cloud_url
+        
         request = {
             "image": image,
             "features": [
@@ -246,13 +249,11 @@ async def add_single_image_to_index(file: bytes = File(), index: Optional[str] =
 
         response = visionClient.annotate_image(request)
         indObj = {}
-        indObj["datatype"] = "image"
-        indObj["url"] = file_url["url"]
-        indObj["metadata"] = {}
+        indObj["doc_type"] = "image"
+        indObj["url"] = cloud_url
+        indObj["metadata"] = utils.get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
         indObj["texts"] = []
-
-        # ~~utils wala metadata connect krlena yahan~~ indObj["metadata"]
 
         # labels
         for label in response.label_annotations:
@@ -272,3 +273,8 @@ async def add_single_image_to_index(file: bytes = File(), index: Optional[str] =
     
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))        
+
+# @router.post("/testing")
+# async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
+#     return(utils.get_meta_data_from_doc(url, "image"))
+#     # print(client.options(ignore_status=[400,404]).indices.delete(index='sample_dataset_3'))
