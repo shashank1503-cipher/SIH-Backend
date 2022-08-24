@@ -7,6 +7,9 @@ import os
 from urllib.parse import urlparse
 import textract
 from google.cloud import vision
+from pydub import AudioSegment
+
+
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
 """Helper Function for Image Location"""
 
@@ -34,6 +37,7 @@ def image_coordinates(image_path):
             return {"success": True, "data": [file_format, image_path.split("/")[-1], file_length,coords,img.get('gps_datestamp')]}
         except AttributeError:
             print ('No Coordinates')
+            return {"success":False}
     else:
         print ('The Image has no EXIF information')   
         return {"success": False}
@@ -85,6 +89,7 @@ def get_meta_data_from_doc(path,type):
         meta_data = {}
         val = image_coordinates(path)
         if(val["success"] == True):
+            print(val)
             file_format = val["data"][0]
             file_name = val["data"][1]
             file_size = val["data"][2]
@@ -129,7 +134,7 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
     for i in range(start, start + rateLimitCloudVision):
         indObj = {}
         indObj["datatype"] = "image"
-        indObj["url"] = imageURLs[i];
+        indObj["url"] = imageURLs[i]
         indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
         indObj["texts"] = []
@@ -153,3 +158,17 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         print(i, doc)
         print("=" * 30)
         yield doc
+
+def extract_from_sound(path):
+    extension = path.split(".")[1]
+    if extension !="wav":
+        src = path
+        path = path.split(".")[0] + ".wav"
+        sound = AudioSegment.from_file(src)
+        sound.export(path, format="wav")
+    text = textract.process(path)
+    text =  text.decode()
+    text = text.strip()
+    text = text.replace("\n", " ")
+    os.remove(path)
+    return text
