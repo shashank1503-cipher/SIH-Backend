@@ -234,7 +234,7 @@ async def add_csv_image_to_index(file: UploadFile = File(...), url_prop: Optiona
         raise HTTPException(status_code=500,detail=str(e))
 
 @router.post("/singleimagefiletoindex")
-async def add_single_image_file_to_index(file: bytes = File(), index: Optional[str] = "sample_dataset_3"):
+async def add_single_image_file_to_index(index: str, file: bytes = File()):
     try:
         file_url = cloudinary.uploader.upload(file, folder = "textual_images")
 
@@ -244,7 +244,7 @@ async def add_single_image_file_to_index(file: bytes = File(), index: Optional[s
         raise HTTPException(status_code=500,detail=str(e))        
 
 @router.post("/singleimageurltoindex")
-async def add_single_image_url_to_index(image_url: str, index: Optional[str] = "sample_dataset_3"):
+async def add_single_image_url_to_index(image_url: str, index: str):
     try:
         urlOpen = urlopen(image_url) 
         img = urlOpen.read()

@@ -187,6 +187,6 @@ def getIndividualImageData(image_url, client, index):
         indObj["texts"].append(val)
         
     print(indObj)
-    # client.index(index = index, document = indObj)
+    client.index(index = index, document = indObj)
     
     return {"success": True, "data": indObj}
