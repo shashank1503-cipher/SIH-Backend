@@ -210,6 +210,7 @@ async def add_cloud_image_to_index(prefix: str, maxSize : Optional[int] = 2000):
 
         rateLimitCloudinary = maxSize if maxSize < images.rate_limit_allowed else images.rate_limit_allowed
         rateLimitCloudVision = maxSize if maxSize < 10 else 10
+        
         next_cursor = None if rateLimitCloudinary == maxSize else images["next_cursor"]
         for j in range(maxSize // rateLimitCloudinary):
             if j != 0:
@@ -256,60 +257,26 @@ async def add_csv_image_to_index(file: UploadFile = File(...), url_prop: Optiona
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
 
-@router.post("/singleimagetoindex")
-async def add_single_image_to_index(req:Request):
-    data = await req.json()
-    print(data)
-    fetch_url = data.get('url',None)
-    if not fetch_url:
-        raise HTTPException(status_code=400, detail="URL not found")
-    if not validators.url(fetch_url):
-        raise HTTPException(status_code=400, detail="Invalid URL")
-    fetch_index = data.get('index',None)
-    if not fetch_index:
-        raise HTTPException(status_code=400, detail="Index not found")
-    fetch_doc_type = data.get('doc_type',None)
-    if not fetch_doc_type:
-        raise HTTPException(status_code=400, detail="Doc Type not found")
-    if fetch_doc_type == 'image':
-        
-        image.source.image_uri = fetch_url
-        request = {
-            "image": image,
-            "features": [
-                {"type_": vision.Feature.Type.LABEL_DETECTION},
-                {"type_": vision.Feature.Type.TEXT_DETECTION},
-            ],
-        }
+@router.post("/singleimagefiletoindex")
+async def add_single_image_file_to_index(index: str, file: bytes = File()):
+    try:
+        file_url = cloudinary.uploader.upload(file, folder = "textual_images")
 
-        response = visionClient.annotate_image(request)
-        indObj = {}
-        indObj["doc_type"] = "image"
-        indObj["url"] = fetch_url
-        indObj["metadata"] = utils.get_meta_data_from_doc(indObj["url"], "image")
-        indObj["labels"] = []
-        indObj["texts"] = []
+        resp = utils.getIndividualImageData(file_url["url"], client, index)
+        return resp
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))        
 
-        # labels
-        for label in response.label_annotations:
-            val = label.description
-            indObj["labels"].append(val)
-
-        # texts 
-        responseSize = len(response.text_annotations)
-        for j in range (1, responseSize):
-            val = response.text_annotations[j].description
-            indObj["texts"].append(val)
-
-        client.index(index = fetch_index, document = indObj)
-        
-        return {"success": True}
-    
-        # except Exception as e:
-        #     print(e)
-        #     raise HTTPException(status_code=500,detail=str(e))
-    else:
-        raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+@router.post("/singleimageurltoindex")
+async def add_single_image_url_to_index(image_url: str, index: str):
+    try:
+        urlOpen = urlopen(image_url) 
+        img = urlOpen.read()
+        file_url = cloudinary.uploader.upload(img, folder = "textual_images")
+        resp = utils.getIndividualImageData(file_url["url"], client, index)
+        return resp
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))        
 
 @router.post("/jsontoindex")
 async def add_json_data(file: UploadFile= File(...), name: str = Form()):
@@ -424,3 +391,8 @@ async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
 
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
+    
+# @router.post("/testing")
+# async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
+#     # return(utils.get_meta_data_from_doc(url, "image"))
+#     print(client.options(ignore_status=[400,404]).indices.delete(index='image_dataset'))
