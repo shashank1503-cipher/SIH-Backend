@@ -20,8 +20,6 @@ import cloudinary.api
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
 
 client = configs.client
-# visionClient = vision.ImageAnnotatorClient()
-# image = vision.Image()
 router = APIRouter()
         
 
@@ -258,4 +256,4 @@ async def add_single_image_url_to_index(image_url: str, index: str):
 # @router.post("/testing")
 # async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
 #     # return(utils.get_meta_data_from_doc(url, "image"))
-#     print(client.options(ignore_status=[400,404]).indices.delete(index='sample_dataset_3'))
+#     print(client.options(ignore_status=[400,404]).indices.delete(index='image_dataset'))

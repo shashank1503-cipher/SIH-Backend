@@ -6,10 +6,13 @@ import requests
 import os
 from urllib.parse import urlparse
 import textract
-from google.cloud import vision
+from google.cloud import vision, translate_v2 as translate
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
-"""Helper Function for Image Location"""
 
+# google cloud translate api
+translate_client = translate.Client()
+
+"""Helper Function for Image Location"""
 from exif import Image
 from geopy.geocoders import Nominatim
 geolocator = Nominatim(user_agent="MyApp")
@@ -27,11 +30,14 @@ def image_coordinates(image_path):
     img = Image(img)
     if img.has_exif:
         try:
-            coords = (decimal_coords(img.gps_latitude,
-                    img.gps_latitude_ref),
-                    decimal_coords(img.gps_longitude,
-                    img.gps_longitude_ref))
-            return {"success": True, "data": [file_format, image_path.split("/")[-1], file_length,coords,img.get('gps_datestamp')]}
+            if(img.get("gps_latitude")) != None:
+                coords = (decimal_coords(img.gps_latitude,
+                        img.gps_latitude_ref),
+                        decimal_coords(img.gps_longitude,
+                        img.gps_longitude_ref))
+                return {"success": True, "data": [file_format, image_path.split("/")[-1], file_length,coords,img.get('gps_datestamp')]}
+            else:
+                return {"success": False, "data": []}   
         except AttributeError:
             print ('No Coordinates')
     else:
@@ -98,6 +104,9 @@ def get_meta_data_from_doc(path,type):
             meta_data['file_size'] = file_size
             meta_data['date'] = dateStamp
             meta_data['format'] = file_format 
+        
+        else:
+            return meta_data    
         return meta_data
 
 
@@ -132,7 +141,7 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         indObj["url"] = imageURLs[i];
         indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
-        indObj["texts"] = []
+        indObj["text_data"] = {"translated": [], "original": []}
 
         # labels
         for label in response[i - start].label_annotations:
@@ -143,7 +152,11 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         responseSize = len(response[i - start].text_annotations)
         for j in range (1, responseSize):
             val = response[i - start].text_annotations[j].description
-            indObj["texts"].append(val)
+            engTranslate = translate_client.translate(val, target_language = "en")
+            if(engTranslate["translatedText"].lower() != engTranslate["input"].lower()):
+                indObj["text_data"]["translated"].append(engTranslate["translatedText"])
+
+            indObj["text_data"]["original"].append(val)
         
         doc = {
             "_index": index,
@@ -173,7 +186,7 @@ def getIndividualImageData(image_url, client, index):
     indObj["url"] = image_url;
     indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
     indObj["labels"] = []
-    indObj["texts"] = []
+    indObj["text_data"] = {"translated": [], "original": []}
     
     # labels
     for label in response.label_annotations:
@@ -184,7 +197,11 @@ def getIndividualImageData(image_url, client, index):
     responseSize = len(response.text_annotations)
     for j in range (1, responseSize):
         val = response.text_annotations[j].description
-        indObj["texts"].append(val)
+        engTranslate = translate_client.translate(val, target_language = "en")
+        if(engTranslate["translatedText"].lower() != engTranslate["input"].lower()):
+            indObj["text_data"]["translated"].append(engTranslate["translatedText"])
+        
+        indObj["text_data"]["original"].append(val)
         
     print(indObj)
     client.index(index = index, document = indObj)
