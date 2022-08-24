@@ -8,6 +8,7 @@ from elasticsearch import helpers
 from google.cloud import vision
 import cloudinary
 from pandas import read_csv
+from urllib.request import urlopen
 
 import configs
 import utils
@@ -19,8 +20,8 @@ import cloudinary.api
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
 
 client = configs.client
-visionClient = vision.ImageAnnotatorClient()
-image = vision.Image()
+# visionClient = vision.ImageAnnotatorClient()
+# image = vision.Image()
 router = APIRouter()
         
 
@@ -232,46 +233,27 @@ async def add_csv_image_to_index(file: UploadFile = File(...), url_prop: Optiona
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
 
-@router.post("/singleimagetoindex")
-async def add_single_image_to_index(file: bytes = File(), index: Optional[str] = "sample_dataset_3"):
+@router.post("/singleimagefiletoindex")
+async def add_single_image_file_to_index(file: bytes = File(), index: Optional[str] = "sample_dataset_3"):
     try:
         file_url = cloudinary.uploader.upload(file, folder = "textual_images")
-        image.source.image_uri = file_url["url"]
-        
-        request = {
-            "image": image,
-            "features": [
-                {"type_": vision.Feature.Type.LABEL_DETECTION},
-                {"type_": vision.Feature.Type.TEXT_DETECTION},
-            ],
-        }
 
-        response = visionClient.annotate_image(request)
-        indObj = {}
-        indObj["doc_type"] = "image"
-        indObj["url"] = file_url["url"];
-        indObj["metadata"] = utils.get_meta_data_from_doc(indObj["url"], "image")
-        indObj["labels"] = []
-        indObj["texts"] = []
-
-        # labels
-        for label in response.label_annotations:
-            val = label.description
-            indObj["labels"].append(val)
-
-        # texts 
-        responseSize = len(response.text_annotations)
-        for j in range (1, responseSize):
-            val = response.text_annotations[j].description
-            indObj["texts"].append(val)
-
-        print(indObj)
-        client.index(index = index, document = indObj)
-        
-        return {"success": True}
-    
+        resp = utils.getIndividualImageData(file_url["url"], client, index)
+        return resp
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))        
+
+@router.post("/singleimageurltoindex")
+async def add_single_image_url_to_index(image_url: str, index: Optional[str] = "sample_dataset_3"):
+    try:
+        urlOpen = urlopen(image_url) 
+        img = urlOpen.read()
+        file_url = cloudinary.uploader.upload(img, folder = "textual_images")
+        resp = utils.getIndividualImageData(file_url["url"], client, index)
+        return resp
+    except Exception as e:
+        raise HTTPException(status_code=500,detail=str(e))        
+
 
 # @router.post("/testing")
 # async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
