@@ -1,4 +1,5 @@
 import json
+from re import L
 from typing import Optional
 import uuid
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form,Request
@@ -7,6 +8,11 @@ import os
 from elasticsearch import helpers
 from google.cloud import vision
 import cloudinary
+import subprocess
+import csv
+import codecs
+from io import StringIO
+
 from pandas import read_csv
 
 import configs
@@ -132,7 +138,14 @@ async def add_word_to_index(req:Request):
 @router.post("/sqltoindex")
 async def add(file: UploadFile= File(...), name: str = Form()):
     try:
+        print(name)
+
+
         contents = await file.read()
+
+        # contents.replace(' IF NOT NULL', '')
+
+        print("Working")
         try:
             f = open('sql.sql', 'wb')
             f.write(contents)
@@ -140,9 +153,16 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
         
-        path = os.path()
+        # print("path: ", os.getcwd())
+        path = os.getcwd()
+        print(path)
         cmd = f"sqldump-to -i {path}/sql.sql > j.json"
-        os.system(cmd)
+        print(cmd)
+        try:
+            # os.system(cmd)
+            subprocess.run(['sqldump-to', '-i', f'{path}/sql.sql', '>', 'j.json'], check=True)
+        except subprocess.CalledProcessError:
+            raise HTTPException(status_code=400, detail=str(e))
 
         def generate_docs():
 
@@ -156,7 +176,10 @@ async def add(file: UploadFile= File(...), name: str = Form()):
                 new_data = []
                 for row in data:
                     dict_obj = json.loads(row)
-                    new_data.routerend(dict_obj)  
+                    new_data.append(dict_obj)
+
+            if not len(new_data):
+                raise HTTPException(status_code=400, detail="error")
 
             for row in new_data:
                 row['doc_type']= 'text'
@@ -173,6 +196,7 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         os.remove('sql.sql')        
         return {"status": 1}
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=500,detail=str(e))
     
 @router.post("/cloudimagetoindex")
@@ -278,3 +302,36 @@ async def add_single_image_to_index(cloud_url: str, index: str):
 # async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
 #     return(utils.get_meta_data_from_doc(url, "image"))
 #     # print(client.options(ignore_status=[400,404]).indices.delete(index='sample_dataset_3'))
+
+
+@router.post('/csvtoindex')
+async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
+    print(name)
+    try:
+        contents = file.file.read()
+        # print(contents)
+        buffer = StringIO(contents.decode('utf-8'))
+        csvReader = csv.DictReader(buffer)
+        
+        out = list(csvReader)
+        
+        def generate_docs():
+
+            for row in out:
+                print(row)
+                row['doc_type'] = 'text'
+                doc = {
+                    "_index": name,
+                    "_id": uuid.uuid4(),
+                    "_source": row
+                }
+                print(doc)
+                yield doc
+        
+        # print("out", out)
+        helpers.bulk(client, generate_docs())
+
+        return {'status': 1}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
