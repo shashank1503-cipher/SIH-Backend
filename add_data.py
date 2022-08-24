@@ -8,6 +8,7 @@ from elasticsearch import helpers
 from google.cloud import vision
 import cloudinary
 from pandas import read_csv
+from urllib.request import urlopen
 
 import configs
 import utils

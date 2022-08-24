@@ -133,8 +133,8 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
     
     for i in range(start, start + rateLimitCloudVision):
         indObj = {}
-        indObj["datatype"] = "image"
-        indObj["url"] = imageURLs[i]
+        indObj["doc_type"] = "image"
+        indObj["url"] = imageURLs[i];
         indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
         indObj["texts"] = []
@@ -158,6 +158,43 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         print(i, doc)
         print("=" * 30)
         yield doc
+
+#individual_image_data_collection
+def getIndividualImageData(image_url, client, index):
+    visionClient = vision.ImageAnnotatorClient()
+    image = vision.Image()
+    image.source.image_uri = image_url
+    request = {
+        "image": image,
+        "features": [
+            {"type_": vision.Feature.Type.LABEL_DETECTION},
+            {"type_": vision.Feature.Type.TEXT_DETECTION},
+        ],
+    }
+
+    response = visionClient.annotate_image(request)
+    indObj = {}
+    indObj["doc_type"] = "image"
+    indObj["url"] = image_url;
+    indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
+    indObj["labels"] = []
+    indObj["texts"] = []
+    
+    # labels
+    for label in response.label_annotations:
+        val = label.description
+        indObj["labels"].append(val)
+        
+    # texts 
+    responseSize = len(response.text_annotations)
+    for j in range (1, responseSize):
+        val = response.text_annotations[j].description
+        indObj["texts"].append(val)
+        
+    print(indObj)
+    client.index(index = index, document = indObj)
+    
+    return {"success": True, "data": indObj}
 
 def extract_from_sound(path):
     extension = path.split(".")[1]
