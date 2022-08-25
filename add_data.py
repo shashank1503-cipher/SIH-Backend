@@ -258,14 +258,28 @@ async def add_csv_image_to_index(file: UploadFile = File(...), url_prop: Optiona
         raise HTTPException(status_code=500,detail=str(e))
 
 @router.post("/singleimagefiletoindex")
-async def add_single_image_file_to_index(index: str, file: bytes = File()):
-    try:
-        file_url = cloudinary.uploader.upload(file, folder = "textual_images")
-
-        resp = utils.getIndividualImageData(file_url["url"], client, index)
-        return resp
-    except Exception as e:
-        raise HTTPException(status_code=500,detail=str(e))        
+async def add_single_image_file_to_index(req:Request):
+    data = await req.json()
+    print(data)
+    fetch_url = data.get('url',None)
+    if not fetch_url:
+        raise HTTPException(status_code=400, detail="URL not found")
+    if not validators.url(fetch_url):
+        raise HTTPException(status_code=400, detail="Invalid URL")
+    fetch_index = data.get('index',None)
+    if not fetch_index:
+        raise HTTPException(status_code=400, detail="Index not found")
+    fetch_doc_type = data.get('doc_type',None)
+    if not fetch_doc_type:
+        raise HTTPException(status_code=400, detail="Doc Type not found")
+    if fetch_doc_type == 'image':
+        try:
+            resp = utils.getIndividualImageData(fetch_url, client, fetch_index)
+            return resp
+        except Exception as e:
+            raise HTTPException(status_code=500,detail=str(e))
+    else:
+        raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")        
 
 @router.post("/singleimageurltoindex")
 async def add_single_image_url_to_index(image_url: str, index: str):
