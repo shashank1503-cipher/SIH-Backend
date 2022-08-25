@@ -1,5 +1,5 @@
 import json
-from re import L
+from zipfile import ZipFile
 from typing import Optional
 import uuid
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form,Request
@@ -10,8 +10,8 @@ from google.cloud import vision
 import cloudinary
 import subprocess
 import csv
-import codecs
 from io import StringIO
+import io
 
 from pandas import read_csv
 from urllib.request import urlopen
@@ -205,16 +205,19 @@ async def add(file: UploadFile= File(...), name: str = Form()):
 async def add_cloud_image_to_index(prefix: str, maxSize : Optional[int] = 2000):
     try:
         images = cloudinary.api.resources(
-        type = "upload", 
-        prefix = prefix,
-        max_results = maxSize)
+            type = "upload", 
+            prefix = prefix,
+            max_results = maxSize
+        )
 
-        rateLimitCloudinary = maxSize if maxSize < images.rate_limit_allowed else images.rate_limit_allowed
-        rateLimitCloudVision = maxSize if maxSize < 10 else 10
+        rateLimitCloudinary = 10 if maxSize < images.rate_limit_allowed else images.rate_limit_allowed
+        rateLimitCloudVision = 10
         
-        next_cursor = None if rateLimitCloudinary == maxSize else images["next_cursor"]
+        next_cursor = None if rateLimitCloudinary == 10 else images["next_cursor"]
+        imageURLs = [i["url"] for i in images["resources"]]
+        sep_counter = 0
         for j in range(maxSize // rateLimitCloudinary):
-            if j != 0:
+            if j != 0 and maxSize >= images.rate_limit_allowed:
                 images = cloudinary.api.resources(
                     type = "upload",
                     prefix = prefix,
@@ -222,41 +225,64 @@ async def add_cloud_image_to_index(prefix: str, maxSize : Optional[int] = 2000):
                     next_cursor = next_cursor
                 )
                 next_cursor = images["next_cursor"]
+                imageURLs = [i["url"] for i in images["resources"]]
+                sep_counter += 1
                 
-            imageURLs = [i["url"] for i in images["resources"]]
-            totalSize = len(imageURLs)
-
-            for i in range(totalSize // rateLimitCloudVision):
-                try:
-                    helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_3"))
-                except Exception as e:
-                    raise HTTPException(status_code=500,detail=str(e))    
-
+            try:
+                helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * j, rateLimitCloudVision, index = "image_dataset"))
+            except Exception as e:
+                raise HTTPException(status_code=500,detail=str(e))    
             print(j, "~^" * 30)
             
-            return {"success": True}
+        if maxSize % rateLimitCloudinary != 0:
+            pass
+        
+            
+        return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
 
 @router.post("/csvimagetoindex")
 async def add_csv_image_to_index(file: UploadFile = File(...), url_prop: Optional[str] = "photo_image_url"):
-    images = read_csv(file.file, sep = "\t")
+    # images = read_csv(file.file, sep = "\t")
+    images = read_csv(file.file)
     imageURLs = images[url_prop]
-    
     totalSize = imageURLs.size
-    
+
     try:
-        rateLimitCloudVision = totalSize if totalSize < 10 else 10
-         
+        rateLimitCloudVision = 10
+        # print(rateLimitCloudVision, totalSize)       
         for i in range(totalSize // rateLimitCloudVision):
             try:
-                helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_4"))
+                helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "image_dataset"))
             except Exception as e:
                 raise HTTPException(status_code=500,detail=str(e))    
 
+        # leftouts
+        if totalSize % rateLimitCloudVision != 0:
+            startInd = (totalSize // rateLimitCloudVision) * 10
+            try:
+                helpers.bulk(client, utils.getImageData(imageURLs, startInd, rateLimitCloudVision - (totalSize % rateLimitCloudVision), index = "image_dataset"))
+            except Exception as e:
+                raise HTTPException(status_code=500,detail=str(e)) 
+        
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
+
+@router.post("/zipimagetoindex")
+async def add_zip_image_to_index(index: str, file: UploadFile = File(...)):
+    with ZipFile(io.BytesIO((file.file).read()), 'r') as zip:
+        listOfFileNames = zip.namelist()
+        for fileName in listOfFileNames:
+            res = zip.open(fileName)
+            try:
+                file_url = cloudinary.uploader.upload(res.read(), folder = "textual_images")
+                resp = utils.getIndividualImageData(file_url["url"], client, index)
+            except Exception as e:
+                raise HTTPException(status_code=500,detail=str(e))
+
+        return {"success": True}
 
 @router.post("/singleimagefiletoindex")
 async def add_single_image_file_to_index(index: str, file: bytes = File()):
@@ -393,7 +419,7 @@ async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
     
-# @router.post("/testing")
-# async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
-#     # return(utils.get_meta_data_from_doc(url, "image"))
-#     print(client.options(ignore_status=[400,404]).indices.delete(index='image_dataset'))
+@router.post("/testing")
+async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
+    # return(utils.get_meta_data_from_doc(url, "image"))
+    print(client.options(ignore_status=[400,404]).indices.delete(index='sample_dataset_4'))
