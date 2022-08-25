@@ -244,7 +244,7 @@ async def add_single_image_file_to_index(req:Request):
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")        
 
 @router.post("/zipimagetoindex")
-async def add_zip_file_images_to_index(index: str, file: UploadFile = File(...)):
+async def add_zip_file_images_to_index(file: UploadFile = File(...), index: str = Form()):
     with ZipFile(io.BytesIO((file.file).read()), 'r') as zip:
         listOfFileNames = zip.namelist()
         for fileName in listOfFileNames:
