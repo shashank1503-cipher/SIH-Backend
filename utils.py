@@ -143,7 +143,7 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         indObj = {}
         indObj["doc_type"] = "image"
         indObj["url"] = imageURLs[i]
-        indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
+        indObj["metadata"] = {} if indObj["url"][-1] == "g" else get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
         indObj["text_data"] = {"translated": [], "original": []}
 
@@ -165,12 +165,15 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         # texts 
         responseSize = len(response[i - start].text_annotations)
         for j in range (1, responseSize):
-            val = response[i - start].text_annotations[j].description
-            engTranslate = translate_client.translate(val, target_language = "en")
-            if(engTranslate["translatedText"].lower() != engTranslate["input"].lower()):
-                indObj["text_data"]["translated"].append(engTranslate["translatedText"])
+            try:
+                val = response[i - start].text_annotations[j].description
+                engTranslate = translate_client.translate(val, target_language = "en")
+                if(engTranslate["translatedText"].lower() != engTranslate["input"].lower()):
+                    indObj["text_data"]["translated"].append(engTranslate["translatedText"])
 
-            indObj["text_data"]["original"].append(val)
+                indObj["text_data"]["original"].append(val)
+            except:
+                continue    
         
         doc = {
             "_index": index,
@@ -200,7 +203,7 @@ def getIndividualImageData(image_url, client, index):
     indObj = {}
     indObj["doc_type"] = "image"
     indObj["url"] = image_url;
-    indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
+    indObj["metadata"] = {} if indObj["url"][-1] == "g" else get_meta_data_from_doc(indObj["url"], "image")
     indObj["labels"] = []
     indObj["text_data"] = {"translated": [], "original": []}
     indObj["objects"] = []
@@ -224,11 +227,13 @@ def getIndividualImageData(image_url, client, index):
     # texts 
     responseSize = len(response.text_annotations)
     for j in range (1, responseSize):
-        val = response.text_annotations[j].description
-        engTranslate = translate_client.translate(val, target_language = "en")
-        if(engTranslate["translatedText"].lower() != engTranslate["input"].lower()):
-            indObj["text_data"]["translated"].append(engTranslate["translatedText"])
-        
+        try:
+            val = response.text_annotations[j].description
+            engTranslate = translate_client.translate(val, target_language = "en")
+            if(engTranslate["translatedText"].lower() != engTranslate["input"].lower()):
+                indObj["text_data"]["translated"].append(engTranslate["translatedText"])
+        except:
+            continue
         indObj["text_data"]["original"].append(val)
         
     print(indObj)
