@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import textract
 from google.cloud import vision, translate_v2 as translate
 from pydub import AudioSegment
+import audioread
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
 
 # google cloud translate api
@@ -123,6 +124,8 @@ def constructReqs(start, imageURLs, rateLimitCloudVision):
                 features = [
                     {"type_": vision.Feature.Type.LABEL_DETECTION},
                     {"type_": vision.Feature.Type.TEXT_DETECTION},
+                    {"type_": vision.Feature.Type.OBJECT_LOCALIZATION},
+                    {"type_": vision.Feature.Type.LOGO_DETECTION}
                 ],
             )
             reqs.append(request)
@@ -148,7 +151,17 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         for label in response[i - start].label_annotations:
             val = label.description
             indObj["labels"].append(val)
-         
+        
+        # objects
+        for object in response[i - start].localized_object_annotations:
+            val = object.name
+            indObj["objects"].append(val)
+
+        # logos
+        for logo in response[i - start].logo_annotations:
+            val = logo.description
+            indObj["logos"].append(val)
+        
         # texts 
         responseSize = len(response[i - start].text_annotations)
         for j in range (1, responseSize):
@@ -178,6 +191,8 @@ def getIndividualImageData(image_url, client, index):
         "features": [
             {"type_": vision.Feature.Type.LABEL_DETECTION},
             {"type_": vision.Feature.Type.TEXT_DETECTION},
+            {"type_": vision.Feature.Type.OBJECT_LOCALIZATION},
+            {"type_": vision.Feature.Type.LOGO_DETECTION}
         ],
     }
 
@@ -188,12 +203,24 @@ def getIndividualImageData(image_url, client, index):
     indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
     indObj["labels"] = []
     indObj["text_data"] = {"translated": [], "original": []}
+    indObj["objects"] = []
+    indObj["logos"] = []
     
     # labels
     for label in response.label_annotations:
         val = label.description
         indObj["labels"].append(val)
         
+    # objects
+    for object in response.localized_object_annotations:
+        val = object.name
+        indObj["objects"].append(val)
+            
+    # logos
+    for logo in response.logo_annotations:
+        val = logo.description
+        indObj["logos"].append(val)
+            
     # texts 
     responseSize = len(response.text_annotations)
     for j in range (1, responseSize):
@@ -211,6 +238,7 @@ def getIndividualImageData(image_url, client, index):
 
 
 def extract_from_sound(path):
+     
     extension = path.split(".")[1]
     if extension !="wav":
         src = path
@@ -232,4 +260,11 @@ def convert_bytes(num):
             return "%3.1f %s" % (num, x)
         num /= 1024.0
 
-    
+def is_feasible_audio(path):
+    with audioread.audio_open(path) as f:
+        totalsec = f.duration
+        totalsec = int(totalsec)
+        if totalsec >= 60:
+            return False
+        else:
+            return True
