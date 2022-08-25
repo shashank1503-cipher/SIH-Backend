@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, File, UploadFile, Form, Request
 
 import configs
 from utils import convert_bytes
@@ -41,6 +41,36 @@ async def count(q:str):
     print(data)
 
     return {'count': data['count']}
+
+@router.post('/delete')
+async def delete(req: Request):
+    data = await req.json()
+    index = data['index']
+
+    print(index)
+    try:
+        data = await client.indices.delete(index=index)
+        # print(data)
+        return {"status": 1}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get('/doc/{index_name}/{doc_id}')
+def getDoc(index_name,doc_id):
+    print(doc_id)
+    print(index_name)
+    data = client.get(index=index_name, id=doc_id)
+
+    final_data = {
+        "index": data["_index"],
+        "id": data['_id'],
+        "source": data["_source"],
+    }
+
+    print(final_data)
+
+    return {"data": final_data}
 
 @router.get('/stats')
 async def stats():
