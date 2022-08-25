@@ -162,7 +162,7 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         print(cmd)
         try:
             # os.system(cmd)
-            subprocess.run(['sqldump-to', '-i', f'{path}/sql.sql', '>', 'j.json'], check=True)
+            subprocess.run(['sqldump-to', '-i', f'{path}/sql.sql', '>', 'j.json'], check=True, shell=True)
         except subprocess.CalledProcessError:
             raise HTTPException(status_code=400, detail=str(e))
 
