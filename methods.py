@@ -126,7 +126,7 @@ def getDoc(index_name,doc_id):
     print(doc_id)
     print(index_name)
     data = client.get(index=index_name, id=doc_id)
-
+    print(data)
     final_data = {
         "index": data["_index"],
         "id": data['_id'],
