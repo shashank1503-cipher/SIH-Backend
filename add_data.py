@@ -157,15 +157,16 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         
         # print("path: ", os.getcwd())
         path = os.getcwd()
-        print(path)
-        cmd = f"sqldump-to -i {path}/sql.sql > j.json"
+        # print(path)
+        cmd = f"cat .\sql.sql | sqldump-to > j.json"
+        cmd2 = f'sqldump-to -i {path}\sql.sql > j.json'
         print(cmd)
         try:
-            # os.system(cmd)
-            subprocess.run(['sqldump-to', '-i', f'{path}/sql.sql', '>', 'j.json'], check=True)
-        except subprocess.CalledProcessError:
+            os.system(f'{cmd2}')
+        except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+        print('wokidvwe')
         def generate_docs():
 
             try:
