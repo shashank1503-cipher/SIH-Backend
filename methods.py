@@ -113,10 +113,11 @@ async def delete(req: Request):
 
     print(index)
     try:
-        data = await client.indices.delete(index=index)
-        # print(data)
+        data = client.options(ignore_status=[400,404]).indices.delete(index=index)
+        print(data)
         return {"status": 1}
     except Exception as e:
+        print(e)
         raise HTTPException(status_code=400, detail=str(e))
 
 
