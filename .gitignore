@@ -9,3 +9,5 @@ venv
 node_modules/
 temp_script.py
 .env
+
+*.mp3
