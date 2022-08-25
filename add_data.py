@@ -1,6 +1,5 @@
 import io
 import json
-from re import L
 from typing import Optional
 import uuid
 from zipfile import ZipFile
@@ -12,11 +11,9 @@ from google.cloud import vision
 import cloudinary
 import subprocess
 import csv
-import codecs
 from io import StringIO
 
 from pandas import read_csv
-from urllib.request import urlopen
 
 import configs
 import utils
@@ -201,47 +198,10 @@ async def add(file: UploadFile= File(...), name: str = Form()):
         return {"status": 1}
     except Exception as e:
         raise HTTPException(status_code=500,detail=str(e))
-    
-@router.post("/cloudimagetoindex")
-async def add_cloud_image_to_index(prefix: str, maxSize : Optional[int] = 2000):
-    try:
-        images = cloudinary.api.resources(
-        type = "upload", 
-        prefix = prefix,
-        max_results = maxSize)
-
-        rateLimitCloudinary = maxSize if maxSize < images.rate_limit_allowed else images.rate_limit_allowed
-        rateLimitCloudVision = maxSize if maxSize < 10 else 10
-        
-        next_cursor = None if rateLimitCloudinary == maxSize else images["next_cursor"]
-        for j in range(maxSize // rateLimitCloudinary):
-            if j != 0:
-                images = cloudinary.api.resources(
-                    type = "upload",
-                    prefix = prefix,
-                    max_results = maxSize,
-                    next_cursor = next_cursor
-                )
-                next_cursor = images["next_cursor"]
-                
-            imageURLs = [i["url"] for i in images["resources"]]
-            totalSize = len(imageURLs)
-
-            for i in range(totalSize // rateLimitCloudVision):
-                try:
-                    helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_3"))
-                except Exception as e:
-                    raise HTTPException(status_code=500,detail=str(e))    
-
-            print(j, "~^" * 30)
-            
-            return {"success": True}
-    except Exception as e:
-        raise HTTPException(status_code=500,detail=str(e))
 
 @router.post("/csvimagetoindex")
-async def add_csv_image_to_index(file: UploadFile = File(...), url_prop: Optional[str] = "photo_image_url"):
-    images = read_csv(file.file, sep = "\t")
+async def add_csv_file_images_to_index(file: UploadFile = File(...), url_prop: Optional[str] = "photo_image_url"):
+    images = read_csv(file.file)
     imageURLs = images[url_prop]
     
     totalSize = imageURLs.size
@@ -283,16 +243,20 @@ async def add_single_image_file_to_index(req:Request):
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")        
 
-@router.post("/singleimageurltoindex")
-async def add_single_image_url_to_index(image_url: str, index: str):
-    try:
-        urlOpen = urlopen(image_url) 
-        img = urlOpen.read()
-        file_url = cloudinary.uploader.upload(img, folder = "textual_images")
-        resp = utils.getIndividualImageData(file_url["url"], client, index)
-        return resp
-    except Exception as e:
-        raise HTTPException(status_code=500,detail=str(e))        
+@router.post("/zipimagetoindex")
+async def add_zip_file_images_to_index(index: str, file: UploadFile = File(...)):
+    with ZipFile(io.BytesIO((file.file).read()), 'r') as zip:
+        listOfFileNames = zip.namelist()
+        for fileName in listOfFileNames:
+            res = zip.open(fileName)
+            try:
+                file_url = cloudinary.uploader.upload(res.read(), folder = "textual_images")
+                resp = utils.getIndividualImageData(file_url["url"], client, index)
+
+            except Exception as e:
+                raise HTTPException(status_code=500,detail=str(e))
+
+        return {"success": True}
 
 @router.post("/jsontoindex")
 async def add_json_data(file: UploadFile= File(...), name: str = Form()):
@@ -374,8 +338,6 @@ async def add_sound(req:Request):
         os.remove(fetch_path)
         return {"message":"Data added to index","data":data}
     
-
-
 @router.post('/csvtoindex')
 async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
     try:
@@ -405,22 +367,56 @@ async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
         return {'status': 1}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
 # @router.post("/testing")
 # async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
 #     # return(utils.get_meta_data_from_doc(url, "image"))
 #     print(client.options(ignore_status=[400,404]).indices.delete(index='image_dataset'))
-@router.post("/zipimagetoindex")
-async def add_zip_image_to_index(index: str, file: UploadFile = File(...)):
     
-    with ZipFile(io.BytesIO((file.file).read()), 'r') as zip:
-        listOfFileNames = zip.namelist()
-        for fileName in listOfFileNames:
-            res = zip.open(fileName)
-            try:
-                file_url = cloudinary.uploader.upload(res.read(), folder = "textual_images")
-                resp = utils.getIndividualImageData(file_url["url"], client, index)
+# @router.post("/cloudimagetoindex")
+# async def add_cloud_image_to_index(prefix: str, maxSize : Optional[int] = 2000):
+#     try:
+#         images = cloudinary.api.resources(
+#         type = "upload", 
+#         prefix = prefix,
+#         max_results = maxSize)
 
-            except Exception as e:
-                raise HTTPException(status_code=500,detail=str(e))
+#         rateLimitCloudinary = maxSize if maxSize < images.rate_limit_allowed else images.rate_limit_allowed
+#         rateLimitCloudVision = maxSize if maxSize < 10 else 10
+        
+#         next_cursor = None if rateLimitCloudinary == maxSize else images["next_cursor"]
+#         for j in range(maxSize // rateLimitCloudinary):
+#             if j != 0:
+#                 images = cloudinary.api.resources(
+#                     type = "upload",
+#                     prefix = prefix,
+#                     max_results = maxSize,
+#                     next_cursor = next_cursor
+#                 )
+#                 next_cursor = images["next_cursor"]
+                
+#             imageURLs = [i["url"] for i in images["resources"]]
+#             totalSize = len(imageURLs)
 
-        return {"success": True}
+#             for i in range(totalSize // rateLimitCloudVision):
+#                 try:
+#                     helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_3"))
+#                 except Exception as e:
+#                     raise HTTPException(status_code=500,detail=str(e))    
+
+#             print(j, "~^" * 30)
+            
+#             return {"success": True}
+#     except Exception as e:
+#         raise HTTPException(status_code=500,detail=str(e))
+
+# @router.post("/singleimageurltoindex")
+# async def add_single_image_url_to_index(image_url: str, index: str):
+#     try:
+#         urlOpen = urlopen(image_url) 
+#         img = urlOpen.read()
+#         file_url = cloudinary.uploader.upload(img, folder = "textual_images")
+#         resp = utils.getIndividualImageData(file_url["url"], client, index)
+#         return resp
+#     except Exception as e:
+#         raise HTTPException(status_code=500,detail=str(e))        
