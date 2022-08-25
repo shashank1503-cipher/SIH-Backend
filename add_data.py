@@ -349,10 +349,13 @@ async def add_sound(req:Request):
     if not fetch_doc_type:
         raise HTTPException(status_code=400, detail="Doc Type not found")
     if fetch_doc_type == 'sound':
+        
         try:
             fetch_path = utils.download_data_from_cloudinary(fetch_url)
         except Exception as e:
             raise HTTPException(status_code=500,detail="Error Downloading File from Cloud on Server " + str(e))
+        if not utils.is_feasible_audio(fetch_path):
+            raise HTTPException(status_code=400, detail="File size too large")
         try:
             content = utils.extract_from_sound(fetch_path)
         except Exception as e:
@@ -408,6 +411,7 @@ async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
 #     print(client.options(ignore_status=[400,404]).indices.delete(index='image_dataset'))
 @router.post("/zipimagetoindex")
 async def add_zip_image_to_index(index: str, file: UploadFile = File(...)):
+    
     with ZipFile(io.BytesIO((file.file).read()), 'r') as zip:
         listOfFileNames = zip.namelist()
         for fileName in listOfFileNames:

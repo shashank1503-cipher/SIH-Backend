@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import textract
 from google.cloud import vision, translate_v2 as translate
 from pydub import AudioSegment
+import audioread
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
 
 # google cloud translate api
@@ -211,6 +212,7 @@ def getIndividualImageData(image_url, client, index):
 
 
 def extract_from_sound(path):
+     
     extension = path.split(".")[1]
     if extension !="wav":
         src = path
@@ -232,4 +234,11 @@ def convert_bytes(num):
             return "%3.1f %s" % (num, x)
         num /= 1024.0
 
-    
+def is_feasible_audio(path):
+    with audioread.audio_open(path) as f:
+        totalsec = f.duration
+        totalsec = int(totalsec)
+        if totalsec >= 60:
+            return False
+        else:
+            return True
