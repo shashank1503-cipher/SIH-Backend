@@ -1,7 +1,9 @@
+import io
 import json
 from re import L
 from typing import Optional
 import uuid
+from zipfile import ZipFile
 from fastapi import APIRouter, HTTPException, File, UploadFile, Form,Request
 import validators
 import os
@@ -373,7 +375,6 @@ async def add_sound(req:Request):
 
 @router.post('/csvtoindex')
 async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
-    print(name)
     try:
         contents = file.file.read()
         # print(contents)
@@ -401,12 +402,21 @@ async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
         return {'status': 1}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-    else:
-        raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")
-    
 # @router.post("/testing")
 # async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
 #     # return(utils.get_meta_data_from_doc(url, "image"))
 #     print(client.options(ignore_status=[400,404]).indices.delete(index='image_dataset'))
+@router.post("/zipimagetoindex")
+async def add_zip_image_to_index(index: str, file: UploadFile = File(...)):
+    with ZipFile(io.BytesIO((file.file).read()), 'r') as zip:
+        listOfFileNames = zip.namelist()
+        for fileName in listOfFileNames:
+            res = zip.open(fileName)
+            try:
+                file_url = cloudinary.uploader.upload(res.read(), folder = "textual_images")
+                resp = utils.getIndividualImageData(file_url["url"], client, index)
+
+            except Exception as e:
+                raise HTTPException(status_code=500,detail=str(e))
+
+        return {"success": True}
