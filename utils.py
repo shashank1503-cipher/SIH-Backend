@@ -188,12 +188,12 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         yield doc
 
 #individual_image_data_collection
-def getIndividualImageData(image_url, client, index):
+def getIndividualImageData(image_url, client, index, content):
     visionClient = vision.ImageAnnotatorClient()
-    image = vision.Image()
-    image.source.image_uri = image_url
+    # image = vision.Image()
+    # image.source.image_uri = image_url
     request = {
-        "image": image,
+        "image": {'content': content},
         "features": [
             {"type_": vision.Feature.Type.LABEL_DETECTION},
             {"type_": vision.Feature.Type.TEXT_DETECTION},
@@ -206,7 +206,7 @@ def getIndividualImageData(image_url, client, index):
     indObj = {}
     indObj["doc_type"] = "image"
     indObj["url"] = image_url
-    # indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
+    indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
     indObj["labels"] = []
     indObj["text_data"] = {"translated": [], "original": []}
     indObj["objects"] = []
