@@ -11,8 +11,9 @@ from google.cloud import vision
 import cloudinary
 import subprocess
 import csv
-from io import StringIO
-
+from io import StringIO, BytesIO
+from PIL import Image as PILImage
+import requests
 from pandas import read_csv
 
 import configs
@@ -224,6 +225,14 @@ async def add_single_image_file_to_index(req:Request):
     data = await req.json()
     print(data)
     fetch_url = data.get('url',None)
+    with BytesIO() as f:
+        im = PILImage.open(requests.get(fetch_url, stream=True).raw)
+        im = im.convert("RGB")
+        # im.save("test.jpg")
+        im = im.resize((500, 500))
+        im.save(f, format='JPEG')
+        val = f.getvalue()
+        
     if not fetch_url:
         raise HTTPException(status_code=400, detail="URL not found")
     if not validators.url(fetch_url):
@@ -236,7 +245,7 @@ async def add_single_image_file_to_index(req:Request):
         raise HTTPException(status_code=400, detail="Doc Type not found")
     if fetch_doc_type == 'image':
         try:
-            resp = utils.getIndividualImageData(fetch_url, client, fetch_index)
+            resp = utils.getIndividualImageData(fetch_url, client, fetch_index, val)
             return resp
         except Exception as e:
             raise HTTPException(status_code=500,detail=str(e))
@@ -250,8 +259,15 @@ async def add_zip_file_images_to_index(file: UploadFile = File(...), index: str 
         for fileName in listOfFileNames:
             res = zip.open(fileName)
             try:
-                file_url = cloudinary.uploader.upload(res.read(), folder = "textual_images")
-                resp = utils.getIndividualImageData(file_url["url"], client, index)
+                with BytesIO() as f:
+                    # im = PILImage.open(requests.get(file_url["url"], stream=True).raw)
+                    im = PILImage.open(BytesIO(res.read()))
+                    im = im.convert("RGB")
+                    im.save(f, format='JPEG')
+                    val = f.getvalue()
+                    file_url = cloudinary.uploader.upload(val, folder = "textual_images")
+    
+                resp = utils.getIndividualImageData(file_url["url"], client, index, val)
 
             except Exception as e:
                 raise HTTPException(status_code=500,detail=str(e))
