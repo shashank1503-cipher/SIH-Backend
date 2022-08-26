@@ -146,7 +146,7 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         indObj = {}
         indObj["doc_type"] = "image"
         indObj["url"] = imageURLs[i]
-        # indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
+        indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
         indObj["text_data"] = {"translated": [], "original": []}
 
