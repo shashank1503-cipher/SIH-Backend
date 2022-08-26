@@ -91,7 +91,7 @@ def get_meta_data_from_doc(path,type):
         return meta_data
     if type == 'image':
         extension = path.split(".")[1]
-        if extension != "jpg" or extension != "jpeg":
+        if extension != "jpg" and extension != "jpeg":
             return {}
         meta_data = {}
         val = image_coordinates(path)
