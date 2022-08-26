@@ -90,6 +90,9 @@ def get_meta_data_from_doc(path,type):
         meta_data['date_created'] = datetime.datetime.now()
         return meta_data
     if type == 'image':
+        extension = path.split(".")[1]
+        if extension != "jpg" or extension != "jpeg":
+            return {}
         meta_data = {}
         val = image_coordinates(path)
         if(val["success"] == True):
@@ -202,7 +205,7 @@ def getIndividualImageData(image_url, client, index):
     response = visionClient.annotate_image(request)
     indObj = {}
     indObj["doc_type"] = "image"
-    indObj["url"] = image_url;
+    indObj["url"] = image_url
     # indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
     indObj["labels"] = []
     indObj["text_data"] = {"translated": [], "original": []}
