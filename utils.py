@@ -143,7 +143,7 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         indObj = {}
         indObj["doc_type"] = "image"
         indObj["url"] = imageURLs[i]
-        indObj["metadata"] = {} if indObj["url"][-1] == "g" else get_meta_data_from_doc(indObj["url"], "image")
+        # indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
         indObj["labels"] = []
         indObj["text_data"] = {"translated": [], "original": []}
 
@@ -203,7 +203,7 @@ def getIndividualImageData(image_url, client, index):
     indObj = {}
     indObj["doc_type"] = "image"
     indObj["url"] = image_url;
-    indObj["metadata"] = {} if indObj["url"][-1] == "g" else get_meta_data_from_doc(indObj["url"], "image")
+    # indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
     indObj["labels"] = []
     indObj["text_data"] = {"translated": [], "original": []}
     indObj["objects"] = []
