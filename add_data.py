@@ -70,9 +70,9 @@ async def add_pdf_to_index(req:Request):
         raise HTTPException(status_code=400, detail="Doc Type not found")
     if fetch_doc_type == 'pdf':
         try:
-            fetch_path = utils.download_data_from_cloudinary(fetch_url)
+            fetch_path = utils.download_data_from_FTP(fetch_url)
         except Exception as e:
-            raise HTTPException(status_code=500,detail="Error Downloading File from Cloud on Server " + str(e))
+            raise HTTPException(status_code=500,detail="Error Downloading File from FTP Server " + str(e))
         try:
             content = utils.get_data_from_pdf(fetch_path)
             meta = utils.get_meta_data_from_doc(fetch_path,'pdf')
@@ -112,9 +112,9 @@ async def add_word_to_index(req:Request):
         raise HTTPException(status_code=400, detail="Doc Type not found")
     if fetch_doc_type == 'doc':
         try:
-            fetch_path = utils.download_data_from_cloudinary(fetch_url)
+            fetch_path = utils.download_data_from_FTP(fetch_url)
         except Exception as e:
-            raise HTTPException(status_code=500,detail="Error Downloading File from Cloud on Server " + str(e))
+            raise HTTPException(status_code=500,detail="Error Downloading File from FTP Server " + str(e))
         try:
             content = utils.extract_data_from_doc(fetch_path)
             meta = utils.get_meta_data_from_doc(fetch_path,'doc')
@@ -223,15 +223,14 @@ async def add_csv_file_images_to_index(file: UploadFile = File(...), url_prop: O
 @router.post("/singleimagefiletoindex")
 async def add_single_image_file_to_index(req:Request):
     data = await req.json()
-    print(data)
     fetch_url = data.get('url',None)
-    with BytesIO() as f:
-        im = PILImage.open(requests.get(fetch_url, stream=True).raw)
-        im = im.convert("RGB")
-        # im.save("test.jpg")
-        im = im.resize((500, 500))
-        im.save(f, format='JPEG')
-        val = f.getvalue()
+    print("Url",fetch_url)
+    # with BytesIO() as f:
+    #     im = PILImage.open(requests.get(fetch_url, stream=True).raw)
+    #     im = im.convert("RGB")
+    #     im = im.resize((500, 500))
+    #     im.save(f, format='JPEG')
+    #     val = f.getvalue()
         
     if not fetch_url:
         raise HTTPException(status_code=400, detail="URL not found")
@@ -243,12 +242,15 @@ async def add_single_image_file_to_index(req:Request):
     fetch_doc_type = data.get('doc_type',None)
     if not fetch_doc_type:
         raise HTTPException(status_code=400, detail="Doc Type not found")
+    
     if fetch_doc_type == 'image':
-        try:
-            resp = utils.getIndividualImageData(fetch_url, client, fetch_index, val)
-            return resp
-        except Exception as e:
-            raise HTTPException(status_code=500,detail=str(e))
+        # try:
+        #     resp = utils.getIndividualImageData(fetch_url, client, fetch_index)
+        #     return resp
+        # except Exception as e:
+        #     raise HTTPException(status_code=500,detail=str(e))
+        resp = utils.getIndividualImageData(fetch_url, client, fetch_index)
+        return resp
     else:
         raise HTTPException(status_code=400, detail="Doc Type not supported for this endpoint")        
 
@@ -311,6 +313,7 @@ async def add_json_data(file: UploadFile= File(...), name: str = Form()):
         os.remove('j.json')
         return {"status": 1}
     except Exception as e:
+        print("Error", e)
         raise HTTPException(status_code=500,detail=str(e))
 
 @router.post("/soundtoindex")
@@ -331,20 +334,21 @@ async def add_sound(req:Request):
     if fetch_doc_type == 'sound':
         
         try:
-            fetch_path = utils.download_data_from_cloudinary(fetch_url)
+            fetch_path = utils.download_data_from_FTP(fetch_url)
         except Exception as e:
-            raise HTTPException(status_code=500,detail="Error Downloading File from Cloud on Server " + str(e))
+            raise HTTPException(status_code=500,detail="Error Downloading File from FTP Server " + str(e))
         if not utils.is_feasible_audio(fetch_path):
-            raise HTTPException(status_code=400, detail="File size too large")
+            raise HTTPException(status_code=400, detail="File size too large - Currently only sound files upto 60sec are supported")
         try:
-            content = utils.extract_from_sound(fetch_path)
+            content,language = utils.extract_from_sound(fetch_path)
         except Exception as e:
             os.remove(fetch_path)
             raise HTTPException(status_code=500,detail="Error Fetching Data From Sound " + str(e))
         data = {
         'doc_type':fetch_doc_type,
         'content':content,
-        'url':fetch_url
+        'url':fetch_url,
+        'original_language':language
         }
         try:
              client.index(index=fetch_index,body=data)
@@ -384,55 +388,3 @@ async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-# @router.post("/testing")
-# async def testing(url: Optional[str] = "https://res.cloudinary.com/dikr8bxj7/image/upload/v1660945000/textual_images/mzsurkkdmw376atg2enp.jpg"):
-#     # return(utils.get_meta_data_from_doc(url, "image"))
-#     print(client.options(ignore_status=[400,404]).indices.delete(index='image_dataset'))
-    
-# @router.post("/cloudimagetoindex")
-# async def add_cloud_image_to_index(prefix: str, maxSize : Optional[int] = 2000):
-#     try:
-#         images = cloudinary.api.resources(
-#         type = "upload", 
-#         prefix = prefix,
-#         max_results = maxSize)
-
-#         rateLimitCloudinary = maxSize if maxSize < images.rate_limit_allowed else images.rate_limit_allowed
-#         rateLimitCloudVision = maxSize if maxSize < 10 else 10
-        
-#         next_cursor = None if rateLimitCloudinary == maxSize else images["next_cursor"]
-#         for j in range(maxSize // rateLimitCloudinary):
-#             if j != 0:
-#                 images = cloudinary.api.resources(
-#                     type = "upload",
-#                     prefix = prefix,
-#                     max_results = maxSize,
-#                     next_cursor = next_cursor
-#                 )
-#                 next_cursor = images["next_cursor"]
-                
-#             imageURLs = [i["url"] for i in images["resources"]]
-#             totalSize = len(imageURLs)
-
-#             for i in range(totalSize // rateLimitCloudVision):
-#                 try:
-#                     helpers.bulk(client, utils.getImageData(imageURLs, rateLimitCloudVision * i, rateLimitCloudVision, index = "sample_dataset_3"))
-#                 except Exception as e:
-#                     raise HTTPException(status_code=500,detail=str(e))    
-
-#             print(j, "~^" * 30)
-            
-#             return {"success": True}
-#     except Exception as e:
-#         raise HTTPException(status_code=500,detail=str(e))
-
-# @router.post("/singleimageurltoindex")
-# async def add_single_image_url_to_index(image_url: str, index: str):
-#     try:
-#         urlOpen = urlopen(image_url) 
-#         img = urlOpen.read()
-#         file_url = cloudinary.uploader.upload(img, folder = "textual_images")
-#         resp = utils.getIndividualImageData(file_url["url"], client, index)
-#         return resp
-#     except Exception as e:
-#         raise HTTPException(status_code=500,detail=str(e))        

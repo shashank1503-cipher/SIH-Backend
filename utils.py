@@ -9,10 +9,16 @@ import textract
 from google.cloud import vision, translate_v2 as translate
 from pydub import AudioSegment
 import audioread
+import whisper
+model = whisper.load_model("small")
+
+
+
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
 
 # google cloud translate api
 translate_client = translate.Client()
+
 
 """Helper Function for Image Location"""
 from exif import Image
@@ -56,7 +62,7 @@ def get_data_from_pdf(path):
     text = text.replace("\n", " ")
     return text
     
-def download_data_from_cloudinary(url):
+def download_data_from_FTP(url):
     a = urlparse(url)
     name = os.path.basename(a.path)                     
     request_obj = requests.get(url)
@@ -188,77 +194,65 @@ def getImageData(imageURLs, start, rateLimitCloudVision, index):
         yield doc
 
 #individual_image_data_collection
-def getIndividualImageData(image_url, client, index, content):
-    visionClient = vision.ImageAnnotatorClient()
-    # image = vision.Image()
-    # image.source.image_uri = image_url
-    request = {
-        "image": {'content': content},
-        "features": [
-            {"type_": vision.Feature.Type.LABEL_DETECTION},
-            {"type_": vision.Feature.Type.TEXT_DETECTION},
-            {"type_": vision.Feature.Type.OBJECT_LOCALIZATION},
-            {"type_": vision.Feature.Type.LOGO_DETECTION}
-        ],
-    }
+def getIndividualImageData(image_url, client, index, content=None):
+    # visionClient = vision.ImageAnnotatorClient()
+    # # image = vision.Image()
+    # # image.source.image_uri = image_url
+    # request = {
+    #     "image": {'content': content},
+    #     "features": [
+    #         {"type_": vision.Feature.Type.LABEL_DETECTION},
+    #         {"type_": vision.Feature.Type.TEXT_DETECTION},
+    #         {"type_": vision.Feature.Type.OBJECT_LOCALIZATION},
+    #         {"type_": vision.Feature.Type.LOGO_DETECTION}
+    #     ],
+    # }
 
-    response = visionClient.annotate_image(request)
+    print("image_url", image_url)
+    data = {
+    'url': image_url,
+}
+    response = requests.post(url="http://127.0.0.1:4500/getdata", json=data)
+    response = response.json()
     indObj = {}
     indObj["doc_type"] = "image"
     indObj["url"] = image_url
     indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
     indObj["labels"] = []
-    indObj["text_data"] = {"translated": [], "original": []}
+    indObj["text_data"] = []
     indObj["objects"] = []
-    indObj["logos"] = []
+    # indObj["logos"] = []
     
     # labels
-    for label in response.label_annotations:
-        val = label.description
-        indObj["labels"].append(val)
+    for label in response["data"]["labels"]:
+        indObj["labels"].append(label)
         
     # objects
-    for object in response.localized_object_annotations:
-        val = object.name
-        indObj["objects"].append(val)
+    for object in response["data"]["objects"]:
+        indObj["objects"].append(object)
             
-    # logos
-    for logo in response.logo_annotations:
-        val = logo.description
-        indObj["logos"].append(val)
+    # # logos
+    # for logo in response.logo_annotations:
+    #     val = logo.description
+    #     indObj["logos"].append(val)
             
     # texts 
-    responseSize = len(response.text_annotations)
-    for j in range (1, responseSize):
-        try:
-            val = response.text_annotations[j].description
-            engTranslate = translate_client.translate(val, target_language = "en")
-            if(engTranslate["translatedText"].lower() != engTranslate["input"].lower()):
-                indObj["text_data"]["translated"].append(engTranslate["translatedText"])
-        except:
-            continue
-        indObj["text_data"]["original"].append(val)
-        
+    for textBlock in response["data"]["texts"]:
+        indObj["text_data"].append(textBlock)
+
     print(indObj)
+    
     client.index(index = index, document = indObj)
     
     return {"success": True, "data": indObj}
 
-
 def extract_from_sound(path):
-     
-    extension = path.split(".")[1]
-    if extension !="wav":
-        src = path
-        path = path.split(".")[0] + ".wav"
-        sound = AudioSegment.from_file(src)
-        sound.export(path, format="wav")
-    text = textract.process(path)
-    text =  text.decode()
-    text = text.strip()
-    text = text.replace("\n", " ")
+    text = model.transcribe(path,task="translate")
+    content = text['text']
+    language = text['language']
+    content = content.replace("\n", " ")
     os.remove(path)
-    return text
+    return content, language
 def convert_bytes(num):
     """
     this function will convert bytes to MB.... GB... etc
