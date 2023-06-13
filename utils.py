@@ -14,6 +14,16 @@ model = whisper.load_model("small")
 
 from exif import Image
 
+supported_file_formats = {
+    "image": ["jpg", "jpeg", "png", "gif", "tiff", "tif", "bmp", "webp"],
+    "video": ["mp4", "avi", "mov", "mkv", "wmv", "flv", "webm", "mpeg"],
+    "audio": ["mp3", "wav", "ogg", "m4a", "wma", "flac", "aac", "alac"],
+    "document": ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt"],
+    "pdf": ["pdf"],
+}
+
+
+
 def decimal_coords(coords, ref):
  decimal_degrees = coords[0] + coords[1] / 60 + coords[2] / 3600
  if ref =="S" or ref == "W":
@@ -241,3 +251,4 @@ def is_feasible_audio(path):
             return False
         else:
             return True
+        
