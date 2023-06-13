@@ -6,24 +6,14 @@ import requests
 import os
 from urllib.parse import urlparse
 import textract
-from google.cloud import vision, translate_v2 as translate
 from pydub import AudioSegment
 import audioread
 import whisper
 model = whisper.load_model("small")
 
 
-
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
-
-# google cloud translate api
-translate_client = translate.Client()
-
-
-"""Helper Function for Image Location"""
 from exif import Image
-from geopy.geocoders import Nominatim
-geolocator = Nominatim(user_agent="MyApp")
+
 def decimal_coords(coords, ref):
  decimal_degrees = coords[0] + coords[1] / 60 + coords[2] / 3600
  if ref =="S" or ref == "W":
@@ -35,7 +25,7 @@ def image_coordinates(image_path):
     img_info = urlOpen.info()
     file_length = img_info["Content-Length"]
     file_format = img_info["Content-Type"]
-    img = Image(img)
+    img = Image(img)     
     if img.has_exif:
         try:
             if(img.get("gps_latitude")) != None:
@@ -96,9 +86,6 @@ def get_meta_data_from_doc(path,type):
         meta_data['date_created'] = datetime.datetime.now()
         return meta_data
     if type == 'image':
-        extension = path.split(".")[1]
-        if extension != "jpg" and extension != "jpeg":
-            return {}
         meta_data = {}
         val = image_coordinates(path)
         if(val["success"] == True):
@@ -107,11 +94,8 @@ def get_meta_data_from_doc(path,type):
             file_size = val["data"][2]
             lat,long = val["data"][3]
             dateStamp = val["data"][4]
-            location = geolocator.reverse(str(lat)+','+str(long))
-
             meta_data['coordinates'] = {'lat':lat,'long':long}
             meta_data['name'] = file_name
-            meta_data['location'] = (location.raw)["display_name"]
             meta_data['file_size'] = file_size
             meta_data['date'] = dateStamp
             meta_data['format'] = file_format 
@@ -121,105 +105,92 @@ def get_meta_data_from_doc(path,type):
         return meta_data
 
 
-# creating a list of requests for making batch requests to cloud vision
-def constructReqs(start, imageURLs, rateLimitCloudVision):
-    reqs = []
-    try:
-        for i in range(start, start + rateLimitCloudVision):
-            visionClient = vision.ImageAnnotatorClient()
-            source_image = vision.ImageSource(image_uri=imageURLs[i])
-            request = vision.AnnotateImageRequest(
-                image = vision.Image(source = source_image),
-                features = [
-                    {"type_": vision.Feature.Type.LABEL_DETECTION},
-                    {"type_": vision.Feature.Type.TEXT_DETECTION},
-                    {"type_": vision.Feature.Type.OBJECT_LOCALIZATION},
-                    {"type_": vision.Feature.Type.LOGO_DETECTION}
-                ],
-            )
-            reqs.append(request)
-        response = visionClient.batch_annotate_images(requests = reqs)
-        return response
-    except Exception as e:
-        raise HTTPException(status_code=500,detail=str(e))
+# # creating a list of requests for making batch requests to cloud vision
+# def constructReqs(start, imageURLs, rateLimitCloudVision):
+#     reqs = []
+#     try:
+#         for i in range(start, start + rateLimitCloudVision):
+#             visionClient = vision.ImageAnnotatorClient()
+#             source_image = vision.ImageSource(image_uri=imageURLs[i])
+#             request = vision.AnnotateImageRequest(
+#                 image = vision.Image(source = source_image),
+#                 features = [
+#                     {"type_": vision.Feature.Type.LABEL_DETECTION},
+#                     {"type_": vision.Feature.Type.TEXT_DETECTION},
+#                     {"type_": vision.Feature.Type.OBJECT_LOCALIZATION},
+#                     {"type_": vision.Feature.Type.LOGO_DETECTION}
+#                 ],
+#             )
+#             reqs.append(request)
+#         response = visionClient.batch_annotate_images(requests = reqs)
+#         return response
+#     except Exception as e:
+#         raise HTTPException(status_code=500,detail=str(e))
 
 # extracting data from constructReqs response
-def getImageData(imageURLs, start, rateLimitCloudVision, index):
-    response = constructReqs(start, imageURLs, rateLimitCloudVision)
-    response = response.responses
+# def getImageData(imageURLs, start, rateLimitCloudVision, index):
+#     response = constructReqs(start, imageURLs, rateLimitCloudVision)
+#     response = response.responses
     
-    for i in range(start, start + rateLimitCloudVision):
-        indObj = {}
-        indObj["doc_type"] = "image"
-        indObj["url"] = imageURLs[i]
-        indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
-        indObj["labels"] = []
-        indObj["text_data"] = {"translated": [], "original": []}
+#     for i in range(start, start + rateLimitCloudVision):
+#         indObj = {}
+#         indObj["doc_type"] = "image"
+#         indObj["url"] = imageURLs[i]
+#         indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
+#         indObj["labels"] = []
+#         indObj["text_data"] = {"translated": [], "original": []}
 
-        # labels
-        for label in response[i - start].label_annotations:
-            val = label.description
-            indObj["labels"].append(val)
+#         # labels
+#         for label in response[i - start].label_annotations:
+#             val = label.description
+#             indObj["labels"].append(val)
         
-        # objects
-        for object in response[i - start].localized_object_annotations:
-            val = object.name
-            indObj["objects"].append(val)
+#         # objects
+#         for object in response[i - start].localized_object_annotations:
+#             val = object.name
+#             indObj["objects"].append(val)
 
-        # logos
-        for logo in response[i - start].logo_annotations:
-            val = logo.description
-            indObj["logos"].append(val)
+#         # logos
+#         for logo in response[i - start].logo_annotations:
+#             val = logo.description
+#             indObj["logos"].append(val)
         
-        # texts 
-        responseSize = len(response[i - start].text_annotations)
-        for j in range (1, responseSize):
-            try:
-                val = response[i - start].text_annotations[j].description
-                engTranslate = translate_client.translate(val, target_language = "en")
-                if(engTranslate["translatedText"].lower() != engTranslate["input"].lower()):
-                    indObj["text_data"]["translated"].append(engTranslate["translatedText"])
+#         # texts 
+#         responseSize = len(response[i - start].text_annotations)
+#         for j in range (1, responseSize):
+#             try:
+#                 val = response[i - start].text_annotations[j].description
+#                 engTranslate = translate_client.translate(val, target_language = "en")
+#                 if(engTranslate["translatedText"].lower() != engTranslate["input"].lower()):
+#                     indObj["text_data"]["translated"].append(engTranslate["translatedText"])
 
-                indObj["text_data"]["original"].append(val)
-            except:
-                continue    
+#                 indObj["text_data"]["original"].append(val)
+#             except:
+#                 continue    
         
-        doc = {
-            "_index": index,
-            "_source": indObj
-        }
+#         doc = {
+#             "_index": index,
+#             "_source": indObj
+#         }
         
-        print(i, doc)
-        print("=" * 30)
-        yield doc
+#         print(i, doc)
+#         print("=" * 30)
+#         yield doc
 
 #individual_image_data_collection
 def getIndividualImageData(image_url, client, index, content=None):
-    # visionClient = vision.ImageAnnotatorClient()
-    # # image = vision.Image()
-    # # image.source.image_uri = image_url
-    # request = {
-    #     "image": {'content': content},
-    #     "features": [
-    #         {"type_": vision.Feature.Type.LABEL_DETECTION},
-    #         {"type_": vision.Feature.Type.TEXT_DETECTION},
-    #         {"type_": vision.Feature.Type.OBJECT_LOCALIZATION},
-    #         {"type_": vision.Feature.Type.LOGO_DETECTION}
-    #     ],
-    # }
-
-    print("image_url", image_url)
     data = {
     'url': image_url,
 }
     response = requests.post(url="http://127.0.0.1:4500/getdata", json=data)
     response = response.json()
+    print(response)
     indObj = {}
     indObj["doc_type"] = "image"
     indObj["url"] = image_url
     indObj["metadata"] = get_meta_data_from_doc(indObj["url"], "image")
     indObj["labels"] = []
-    indObj["text_data"] = []
+    indObj["text_data"] = {"translated":[],"original":[]}
     indObj["objects"] = []
     # indObj["logos"] = []
     
@@ -229,7 +200,7 @@ def getIndividualImageData(image_url, client, index, content=None):
         
     # objects
     for object in response["data"]["objects"]:
-        indObj["objects"].append(object)
+        indObj["objects"].append(object['Object type'])
             
     # # logos
     # for logo in response.logo_annotations:
@@ -238,7 +209,7 @@ def getIndividualImageData(image_url, client, index, content=None):
             
     # texts 
     for textBlock in response["data"]["texts"]:
-        indObj["text_data"].append(textBlock)
+        indObj["text_data"]["original"].append(textBlock["text"])
 
     print(indObj)
     

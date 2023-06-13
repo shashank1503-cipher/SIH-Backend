@@ -7,8 +7,6 @@ from fastapi import APIRouter, HTTPException, File, UploadFile, Form,Request
 import validators
 import os
 from elasticsearch import helpers
-from google.cloud import vision
-import cloudinary
 import subprocess
 import csv
 from io import StringIO, BytesIO
@@ -19,15 +17,9 @@ from pandas import read_csv
 import configs
 import utils
 
-import cloudinary.uploader
-import cloudinary.api
 
-# cloud vision api creds
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "copper-guide-359913-dd3e59666dc7.json"
 
 client = configs.client
-visionClient = vision.ImageAnnotatorClient()
-image = vision.Image()
 router = APIRouter()
         
 
