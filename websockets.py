@@ -1,6 +1,5 @@
 from fastapi import WebSocket, APIRouter
 
-import websockets
 class WebSocketManager:
     def __init__(self):
         self.connections = []

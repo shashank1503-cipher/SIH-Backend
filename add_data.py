@@ -14,9 +14,10 @@ from PIL import Image as PILImage
 import requests
 from pandas import read_csv
 
+
 import configs
 import utils
-from websockets import manager
+# from websockets import manager
 
 
 
@@ -310,7 +311,6 @@ async def add_json_data(file: UploadFile= File(...), name: str = Form()):
 @router.post("/soundtoindex")
 async def add_sound(req:Request):
     data = await req.json()
-    print(data)
     fetch_url = data.get('url',None)
     if not fetch_url:
         raise HTTPException(status_code=400, detail="URL not found")

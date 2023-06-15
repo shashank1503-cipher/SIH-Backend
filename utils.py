@@ -10,6 +10,9 @@ from pydub import AudioSegment
 import audioread
 import whisper
 model = whisper.load_model("small")
+import math
+from win32api import GetShortPathName 
+
 
 
 from exif import Image
@@ -69,6 +72,14 @@ def download_data_from_FTP(url):
     open(name, 'wb').write(request_obj.content) 
     return name
 def extract_data_from_doc(path):
+    if path.lower().endswith(".doc"):
+        path = GetShortPathName(path)
+        text = textract.process(path, encoding='UTF-8')
+        text =  text.decode()
+        text = text.strip()
+        text = text.replace("\n", " ")
+        return text
+
     text = textract.process(path)
     text =  text.decode()
     text = text.strip()
@@ -190,8 +201,8 @@ def get_meta_data_from_doc(path,type):
 #individual_image_data_collection
 def getIndividualImageData(image_url, client, index, content=None):
     data = {
-    'url': image_url,
-}
+        'url': image_url,
+    }
     response = requests.post(url="http://127.0.0.1:4500/getdata", json=data)
     response = response.json()
     print(response)
@@ -228,12 +239,52 @@ def getIndividualImageData(image_url, client, index, content=None):
     return {"success": True, "data": indObj}
 
 def extract_from_sound(path):
-    text = model.transcribe(path,task="translate")
-    content = text['text']
-    language = text['language']
-    content = content.replace("\n", " ")
-    os.remove(path)
-    return content, language
+    def split_audio(audio_file_path, chunk_duration_ms):
+        # Load the audio file
+        audio = AudioSegment.from_file(audio_file_path)
+
+        # Calculate the chunk duration in milliseconds
+        chunk_duration_ms = chunk_duration_ms * 1000
+
+        # Get the total duration of the audio in milliseconds
+        total_duration_ms = len(audio)
+
+        # Calculate the number of chunks needed
+        num_chunks = math.ceil(total_duration_ms / chunk_duration_ms)
+
+        # Split the audio into chunks
+        chunks = []
+        for i in range(num_chunks):
+            start_time = i * chunk_duration_ms
+            end_time = start_time + chunk_duration_ms
+
+            # Make sure the end time doesn't exceed the total duration
+            if end_time > total_duration_ms:
+                end_time = total_duration_ms
+
+            chunk = audio[start_time:end_time]
+            chunks.append(chunk)
+
+        return chunks
+
+    # Example usage
+    chunk_duration = 30  # seconds
+
+    audio_chunks = split_audio(path, chunk_duration)
+    for i, chunk in enumerate(audio_chunks):
+        chunk.export(f'chunk_{i}.wav', format='wav')
+    final_content = []
+    language = None
+    for i in range(len(audio_chunks)):
+        print("progress",i/len(audio_chunks)*100,"%")
+        text = model.transcribe(f'chunk_{i}.wav',language='hi')
+        content = text['text']
+        language = text['language']
+        content = content.replace("\n", " ")
+        print(content)
+        final_content.append(content)
+    final_content = ' '.join(final_content)
+    return final_content, language
 def convert_bytes(num):
     """
     this function will convert bytes to MB.... GB... etc
@@ -251,4 +302,14 @@ def is_feasible_audio(path):
             return False
         else:
             return True
+def upload_to_ftp(filename):
+    url = "http://127.0.0.1:5500/upload"   
+    with open(filename, 'rb') as f:
+        files = {'file': (filename, f)}
+        r = requests.post(url, files=files)
+        if r.status_code == 200:
+            return r.json()['url']
+        else:
+            return None
+
         
