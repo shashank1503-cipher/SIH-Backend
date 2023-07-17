@@ -9,8 +9,12 @@ import textract
 from pydub import AudioSegment
 import audioread
 import whisper
+import math
+from win32api import GetShortPathName
+import aspose.words as aw
 model = whisper.load_model("small")
 
+import json
 
 from exif import Image
 
@@ -50,6 +54,7 @@ def get_data_from_pdf(path):
         text += page.extract_text() + "\n"
     text = text.strip()
     text = text.replace("\n", " ")
+    print(text)
     return text
     
 def download_data_from_FTP(url):
@@ -59,6 +64,18 @@ def download_data_from_FTP(url):
     open(name, 'wb').write(request_obj.content) 
     return name
 def extract_data_from_doc(path):
+    if path.lower().endswith(".doc"):
+        doc = aw.Document(path)
+        doc.save("Output.docx")
+        text = textract.process("Output.docx")
+        text =  text.decode()
+        text = text.strip()
+        text = text.replace("\n", " ")
+        text = text.replace("Evaluation Only. Created with Aspose.Words. Copyright 2003-2023 Aspose Pty Ltd.","")
+        text = text.replace("This document was truncated here because it was created in the Evaluation Mode.  Created with an evaluation copy of Aspose.Words. To discover the full versions of our APIs please visit: https://products.aspose.com/words/","")
+        text = text.replace("Created with an evaluation copy of Aspose.Words. To discover the full versions of our APIs please visit: https://products.aspose.com/words/","")
+        return text
+
     text = textract.process(path)
     text =  text.decode()
     text = text.strip()
@@ -212,18 +229,40 @@ def getIndividualImageData(image_url, client, index, content=None):
         indObj["text_data"]["original"].append(textBlock["text"])
 
     print(indObj)
+    with open('image_logs.txt','w') as f:
+        f.write(image_url)
+        f.write("\n")
+        f.write(json.dumps(indObj)) 
+        f.write("\n")
+    
+    errors = ""
+    for error in response["meta"]["error"]:
+        errors += error["task"] + ","
+    
+    if(errors != ""):
+        errors = errors[:-1]
+    
     
     client.index(index = index, document = indObj)
     
-    return {"success": True, "data": indObj}
+    return {"success": True, "data": indObj, "errors": errors}
 
 def extract_from_sound(path):
-    text = model.transcribe(path,task="translate")
-    content = text['text']
-    language = text['language']
-    content = content.replace("\n", " ")
-    os.remove(path)
-    return content, language
+    data = {
+        'url': path,
+    }
+
+    response = requests.post(url="http://127.0.0.1:6500/asr", json=data)
+    response = response.json()
+    print(response)
+    if response["meta"]["error"] != []:
+        return {"success": False, "data": {}, "errors": response["meta"]["error"]}
+    
+    transcription = response["data"]["transcription"]
+    language = response["data"]["language"]
+    
+    return {"success": True, "data": {"content": transcription, "language": language}, "errors": []}
+
 def convert_bytes(num):
     """
     this function will convert bytes to MB.... GB... etc
@@ -241,3 +280,13 @@ def is_feasible_audio(path):
             return False
         else:
             return True
+        
+def upload_to_ftp(filename):
+    url = "http://127.0.0.1:5500/upload"   
+    with open(filename, 'rb') as f:
+        files = {'file': (filename, f)}
+        r = requests.post(url, files=files)
+        if r.status_code == 200:
+            return r.json()['url']
+        else:
+            return None

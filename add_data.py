@@ -311,7 +311,6 @@ async def add_json_data(file: UploadFile= File(...), name: str = Form()):
 @router.post("/soundtoindex")
 async def add_sound(req:Request):
     data = await req.json()
-    print(data)
     fetch_url = data.get('url',None)
     if not fetch_url:
         raise HTTPException(status_code=400, detail="URL not found")
@@ -326,15 +325,14 @@ async def add_sound(req:Request):
     if fetch_doc_type == 'sound':
         
         try:
-            fetch_path = utils.download_data_from_FTP(fetch_url)
+            data = utils.extract_from_sound(fetch_url)
+            if data["success"] == False:
+                raise HTTPException(status_code=500, detail=data["errors"])
+            data = data["data"]
+            content = data.get('content',None)
+            language = data.get('language',None)
         except Exception as e:
-            raise HTTPException(status_code=500,detail="Error Downloading File from FTP Server " + str(e))
-        if not utils.is_feasible_audio(fetch_path):
-            raise HTTPException(status_code=400, detail="File size too large - Currently only sound files upto 60sec are supported")
-        try:
-            content,language = utils.extract_from_sound(fetch_path)
-        except Exception as e:
-            os.remove(fetch_path)
+            # os.remove(fetch_url)
             raise HTTPException(status_code=500,detail="Error Fetching Data From Sound " + str(e))
         data = {
         'doc_type':fetch_doc_type,
@@ -345,11 +343,9 @@ async def add_sound(req:Request):
         try:
              client.index(index=fetch_index,body=data)
         except Exception as e:
-            os.remove(fetch_path)
             raise HTTPException(status_code=500,detail="Error Adding Data to Index " + str(e))
-        os.remove(fetch_path)
         return {"message":"Data added to index","data":data}
-    
+
 @router.post('/csvtoindex')
 async def csvtoindex(file: UploadFile = File(...), name: str = Form()):
     try:
