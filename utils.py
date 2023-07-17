@@ -13,10 +13,23 @@ import math
 from win32api import GetShortPathName
 import aspose.words as aw
 model = whisper.load_model("small")
+import math
+from win32api import GetShortPathName 
+
 
 import json
 
 from exif import Image
+
+supported_file_formats = {
+    "image": ["jpg", "jpeg", "png", "gif", "tiff", "tif", "bmp", "webp"],
+    "video": ["mp4", "avi", "mov", "mkv", "wmv", "flv", "webm", "mpeg"],
+    "audio": ["mp3", "wav", "ogg", "m4a", "wma", "flac", "aac", "alac"],
+    "document": ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt"],
+    "pdf": ["pdf"],
+}
+
+
 
 def decimal_coords(coords, ref):
  decimal_degrees = coords[0] + coords[1] / 60 + coords[2] / 3600
@@ -64,6 +77,14 @@ def download_data_from_FTP(url):
     open(name, 'wb').write(request_obj.content) 
     return name
 def extract_data_from_doc(path):
+    if path.lower().endswith(".doc"):
+        path = GetShortPathName(path)
+        text = textract.process(path, encoding='UTF-8')
+        text =  text.decode()
+        text = text.strip()
+        text = text.replace("\n", " ")
+        return text
+
     if path.lower().endswith(".doc"):
         doc = aw.Document(path)
         doc.save("Output.docx")
@@ -197,8 +218,8 @@ def get_meta_data_from_doc(path,type):
 #individual_image_data_collection
 def getIndividualImageData(image_url, client, index, content=None):
     data = {
-    'url': image_url,
-}
+        'url': image_url,
+    }
     response = requests.post(url="http://127.0.0.1:4500/getdata", json=data)
     response = response.json()
     print(response)
@@ -248,21 +269,12 @@ def getIndividualImageData(image_url, client, index, content=None):
     return {"success": True, "data": indObj, "errors": errors}
 
 def extract_from_sound(path):
-    data = {
-        'url': path,
-    }
-
-    response = requests.post(url="http://127.0.0.1:6500/asr", json=data)
-    response = response.json()
-    print(response)
-    if response["meta"]["error"] != []:
-        return {"success": False, "data": {}, "errors": response["meta"]["error"]}
-    
-    transcription = response["data"]["transcription"]
-    language = response["data"]["language"]
-    
-    return {"success": True, "data": {"content": transcription, "language": language}, "errors": []}
-
+    text = model.transcribe(path,task="translate")
+    content = text['text']
+    language = text['language']
+    content = content.replace("\n", " ")
+    os.remove(path)
+    return content, language
 def convert_bytes(num):
     """
     this function will convert bytes to MB.... GB... etc
@@ -280,13 +292,3 @@ def is_feasible_audio(path):
             return False
         else:
             return True
-        
-def upload_to_ftp(filename):
-    url = "http://127.0.0.1:5500/upload"   
-    with open(filename, 'rb') as f:
-        files = {'file': (filename, f)}
-        r = requests.post(url, files=files)
-        if r.status_code == 200:
-            return r.json()['url']
-        else:
-            return None

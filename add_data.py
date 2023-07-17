@@ -14,14 +14,17 @@ from PIL import Image as PILImage
 import requests
 from pandas import read_csv
 
+
 import configs
 import utils
+# from websockets import manager
 
 
 
 client = configs.client
 router = APIRouter()
-        
+
+
 
 @router.post("/texttoindex")
 async def add_data_to_index(req: Request):
@@ -251,20 +254,17 @@ async def add_zip_file_images_to_index(file: UploadFile = File(...), index: str 
     with ZipFile(io.BytesIO((file.file).read()), 'r') as zip:
         listOfFileNames = zip.namelist()
         for fileName in listOfFileNames:
-            res = zip.open(fileName)
-            try:
-                with BytesIO() as f:
-                    # im = PILImage.open(requests.get(file_url["url"], stream=True).raw)
-                    im = PILImage.open(BytesIO(res.read()))
-                    im = im.convert("RGB")
-                    im.save(f, format='JPEG')
-                    val = f.getvalue()
-                    file_url = cloudinary.uploader.upload(val, folder = "textual_images")
-    
-                resp = utils.getIndividualImageData(file_url["url"], client, index, val)
+            extension = fileName.split(".")[-1]
+            file_formats = utils.supported_file_formats
+            zip.extract(fileName)
 
-            except Exception as e:
-                raise HTTPException(status_code=500,detail=str(e))
+            url = "http://127.0.0.1:5500/upload"   
+            with open(fileName, 'rb') as f:
+                files = {'file': (fileName, f)}
+                r = requests.post(url, files=files)
+                if r.status_code == 200:
+                    print('File uploaded successfully.')
+            
 
         return {"success": True}
 
